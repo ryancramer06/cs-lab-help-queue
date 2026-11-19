@@ -108,6 +108,9 @@ The current connection test only reads `SELECT 1` and skips when
 test data. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
 as supported by the installed Starlette version.
 
+GitHub Actions runs the suite against a temporary PostgreSQL 18 service on
+pushes to `main` and pull requests targeting `main`.
+
 ## Roadmap
 
 1. Repository setup and Python environment.
