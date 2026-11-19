@@ -1,5 +1,7 @@
+from getpass import GetPassWarning
 import sys
 from unittest.mock import MagicMock, Mock
+import warnings
 
 import psycopg
 import pytest
@@ -39,6 +41,37 @@ def test_setup_rejects_invalid_port_before_asking_for_password(
     assert error.value.code == 2
     assert "--port" in capsys.readouterr().err
     password_prompt.assert_not_called()
+    assert not (setup_project / ".env").exists()
+
+
+@pytest.mark.parametrize("error_type,exit_code", [(KeyboardInterrupt, 130), (EOFError, 1)])
+def test_setup_handles_cancelled_password_input_without_connecting(
+    setup_project, monkeypatch, capsys, error_type, exit_code
+):
+    monkeypatch.setattr(setup_database, "getpass", Mock(side_effect=error_type))
+    connect = Mock()
+    monkeypatch.setattr(setup_database.psycopg, "connect", connect)
+
+    assert setup_database.main() == exit_code
+    assert "cancelled" in capsys.readouterr().out
+    connect.assert_not_called()
+    assert not (setup_project / ".env").exists()
+
+
+def test_setup_refuses_password_input_when_echo_cannot_be_disabled(
+    setup_project, monkeypatch, capsys
+):
+    def unsafe_password_prompt(prompt):
+        warnings.warn("Password input may be echoed", GetPassWarning)
+        raise AssertionError("Visible password input must never be reached")
+
+    monkeypatch.setattr(setup_database, "getpass", unsafe_password_prompt)
+    connect = Mock()
+    monkeypatch.setattr(setup_database.psycopg, "connect", connect)
+
+    assert setup_database.main() == 1
+    assert "Hidden password input is unavailable" in capsys.readouterr().out
+    connect.assert_not_called()
     assert not (setup_project / ".env").exists()
 
 

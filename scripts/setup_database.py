@@ -1,9 +1,10 @@
 """Create a dedicated local PostgreSQL database and an ignored .env file."""
 
 import argparse
-from getpass import getpass
+from getpass import GetPassWarning, getpass
 from pathlib import Path
 import secrets
+import warnings
 
 import psycopg
 from psycopg import sql
@@ -29,7 +30,18 @@ def main() -> int:
         print(".env already exists. Check /health/ready before changing your setup.")
         return 1
 
-    admin_password = getpass(f"PostgreSQL password for {args.admin_user}: ")
+    try:
+        with warnings.catch_warnings():
+            # getpass otherwise falls back to visible input in unsupported terminals.
+            warnings.simplefilter("error", GetPassWarning)
+            admin_password = getpass(f"PostgreSQL password for {args.admin_user}: ")
+    except (EOFError, KeyboardInterrupt) as error:
+        print("\nDatabase setup cancelled. No changes were made.")
+        return 130 if isinstance(error, KeyboardInterrupt) else 1
+    except GetPassWarning:
+        print("Hidden password input is unavailable. Run setup in the VS Code terminal.")
+        return 1
+
     app_password = secrets.token_urlsafe(32)
 
     try:
