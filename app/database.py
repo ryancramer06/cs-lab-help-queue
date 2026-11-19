@@ -4,9 +4,13 @@ from collections.abc import Iterator
 
 from fastapi import Request
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from app.config import Settings
+
+
+class Base(DeclarativeBase):
+    """Shared metadata for application models and Alembic migrations."""
 
 
 def create_database_engine(settings: Settings) -> Engine:

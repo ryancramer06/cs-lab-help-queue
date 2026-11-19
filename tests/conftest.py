@@ -1,8 +1,12 @@
 import os
+from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.schema import CreateSchema
 
 from app.config import Settings
+from app.database import create_database_engine
 
 
 @pytest.fixture(autouse=True)
@@ -27,3 +31,24 @@ def postgres_settings() -> Settings:
     if not database_url:
         pytest.skip("Set TEST_DATABASE_URL to run the PostgreSQL connection test")
     return Settings(_env_file=None, database_url=database_url)
+
+
+@pytest.fixture
+def isolated_postgres_connection(postgres_settings):
+    engine = create_database_engine(postgres_settings)
+    try:
+        with engine.connect() as connection:
+            transaction = connection.begin()
+            try:
+                schema_name = f"test_{uuid4().hex}"
+                connection.execute(CreateSchema(schema_name))
+                connection.execute(
+                    text("SELECT set_config('search_path', :schema, true)"),
+                    {"schema": schema_name},
+                )
+                yield connection
+            finally:
+                # PostgreSQL rolls back the temporary schema, tables, and test rows.
+                transaction.rollback()
+    finally:
+        engine.dispose()
