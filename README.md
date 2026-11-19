@@ -6,9 +6,9 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Phase 2: backend foundation. FastAPI configuration, PostgreSQL connectivity,
-and health checks are implemented. Student requests, TA tools, and analytics
-are planned for later phases.
+Early Phase 3: the backend foundation, help request model, and initial database
+migration are implemented. Request validation and database operations are next.
+Student and TA interfaces, API workflows, and analytics are planned for later phases.
 
 ## Planned features
 
@@ -70,7 +70,17 @@ characters in manually entered credentials. Never commit `.env`.
 | `DATABASE_CONNECT_TIMEOUT` | Connection and pool checkout timeout, 1-30 seconds; default 5 |
 
 Environment variables override values in `.env`. Invalid configuration prevents
-startup. No application tables exist yet; Alembic migrations start in Phase 3.
+startup. After creating the database, initialize or update its tables with:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic current
+```
+
+Alembic tracks applied schema changes. The initial migration creates
+`help_requests` with request details, an optional assigned TA, and timestamps
+for creation, claiming, work starting, and resolution. Status and issue
+category are constrained to known values in PostgreSQL.
 
 ### Run the backend
 
@@ -95,7 +105,8 @@ this application in Phase 5. There is no page at `/` yet.
 ```
 
 Configuration and database error-handling tests run without PostgreSQL. To also
-run the real connection test, use a dedicated test database URL:
+run model and migration tests, use a dedicated test database URL whose login
+can create schemas:
 
 ```powershell
 $env:TEST_DATABASE_URL = 'postgresql+psycopg://test_user:replace_me@localhost:5432/test_queue'
@@ -103,9 +114,10 @@ $env:TEST_DATABASE_URL = 'postgresql+psycopg://test_user:replace_me@localhost:54
 Remove-Item Env:TEST_DATABASE_URL
 ```
 
-The current connection test only reads `SELECT 1` and skips when
-`TEST_DATABASE_URL` is unset. Later phases will add workflow tests with isolated
-test data. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
+PostgreSQL tests skip when `TEST_DATABASE_URL` is unset. Model and migration
+tests create temporary schemas inside transactions and roll them back after
+each test, including migration downgrade tests. Later phases will add request
+workflow tests. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
 as supported by the installed Starlette version.
 
 GitHub Actions runs the suite against a temporary PostgreSQL 18 service on
