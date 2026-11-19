@@ -1,0 +1,22 @@
+import os
+
+import pytest
+
+from app.config import Settings
+
+
+@pytest.fixture
+def settings() -> Settings:
+    return Settings(
+        _env_file=None,
+        database_url="postgresql+psycopg://test_user:test_password@127.0.0.1:1/test_queue",
+        database_connect_timeout=1,
+    )
+
+
+@pytest.fixture
+def postgres_settings() -> Settings:
+    database_url = os.environ.get("TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("Set TEST_DATABASE_URL to run the PostgreSQL connection test")
+    return Settings(_env_file=None, database_url=database_url)
