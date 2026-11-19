@@ -6,7 +6,9 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Phase 1: repository setup. Application features have not been implemented yet.
+Phase 2: backend foundation. FastAPI configuration, PostgreSQL connectivity,
+and health checks are implemented. Student requests, TA tools, and analytics
+are planned for later phases.
 
 ## Planned features
 
@@ -34,6 +36,75 @@ python -m venv .venv
 Select `.venv\Scripts\python.exe` with **Python: Select Interpreter** in VS Code.
 Using the interpreter directly avoids needing to change PowerShell's execution
 policy to activate the environment.
+
+If Python was installed through `uv` for this checkout, `.venv` is already
+configured. Install or update dependencies with:
+
+```powershell
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+```
+
+### Database and environment
+
+Start PostgreSQL, then run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\setup_database.py
+```
+
+Enter the `postgres` admin password at the hidden local prompt. The script
+creates the `cs_lab_app` login and `cs_lab_help_queue` database, generates a
+random application password, and writes an ignored `.env` file. It does not
+save the admin password, overwrite `.env`, or change an existing project role
+or database. Use `--port` or `--admin-user` if your installation differs.
+
+Alternatively, create a dedicated login and database yourself, copy
+`.env.example` to `.env`, and replace the placeholders. URL-encode special
+characters in manually entered credentials. Never commit `.env`.
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Required SQLAlchemy URL using `postgresql+psycopg://` |
+| `DATABASE_CONNECT_TIMEOUT` | Connection and pool checkout timeout, 1-30 seconds; default 5 |
+
+Environment variables override values in `.env`. Invalid configuration prevents
+startup. No application tables exist yet; Alembic migrations start in Phase 3.
+
+### Run the backend
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --reload
+```
+
+- [API documentation](http://127.0.0.1:8000/docs): explore the current endpoints.
+- [Liveness](http://127.0.0.1:8000/health): returns HTTP 200 when the app is running.
+- [Readiness](http://127.0.0.1:8000/health/ready): executes `SELECT 1` against
+  PostgreSQL; returns HTTP 200 when connected or HTTP 503 when unavailable.
+
+The database pool is created at startup and disposed at shutdown. Each request
+uses a separate SQLAlchemy session, which closes after the response. Health
+responses do not expose connection details. The frontend will be served by
+this application in Phase 5. There is no page at `/` yet.
+
+### Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Configuration and database error-handling tests run without PostgreSQL. To also
+run the real connection test, use a dedicated test database URL:
+
+```powershell
+$env:TEST_DATABASE_URL = 'postgresql+psycopg://test_user:replace_me@localhost:5432/test_queue'
+.\.venv\Scripts\python.exe -m pytest -q
+Remove-Item Env:TEST_DATABASE_URL
+```
+
+The current connection test only reads `SELECT 1` and skips when
+`TEST_DATABASE_URL` is unset. Later phases will add workflow tests with isolated
+test data. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
+as supported by the installed Starlette version.
 
 ## Roadmap
 
