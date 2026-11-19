@@ -16,6 +16,7 @@ def test_liveness_does_not_require_a_database_connection(settings):
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.parametrize(
@@ -37,6 +38,7 @@ def test_readiness_reports_database_failure_without_internal_details(settings, e
 
     assert response.status_code == 503
     assert response.json() == {"status": "unavailable", "database": "unavailable"}
+    assert response.headers["cache-control"] == "no-store"
     assert "private-password-and-host" not in response.text
     assert liveness.status_code == 200
 
@@ -48,3 +50,4 @@ def test_readiness_with_a_real_postgres_connection(postgres_settings):
             response = client.get("/health/ready")
             assert response.status_code == 200
             assert response.json() == {"status": "ok", "database": "connected"}
+            assert response.headers["cache-control"] == "no-store"

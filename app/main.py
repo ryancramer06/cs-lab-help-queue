@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -35,7 +35,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     @application.get("/health", tags=["Health"])
-    def health() -> dict[str, str]:
+    def health(response: Response) -> dict[str, str]:
+        response.headers["Cache-Control"] = "no-store"
         return {"status": "ok"}
 
     @application.get(
@@ -51,7 +52,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return JSONResponse(
                 status_code=503,
                 content={"status": "unavailable", "database": "unavailable"},
+                headers={"Cache-Control": "no-store"},
             )
-        return JSONResponse(content={"status": "ok", "database": "connected"})
+        return JSONResponse(
+            content={"status": "ok", "database": "connected"},
+            headers={"Cache-Control": "no-store"},
+        )
 
     return application
