@@ -67,6 +67,25 @@ def main() -> int:
                 )
                 return 1
 
+            database_url = URL.create(
+                "postgresql+psycopg",
+                username=ROLE_NAME,
+                password=app_password,
+                host=args.host,
+                port=args.port,
+                database=DATABASE_NAME,
+            )
+            # Persist credentials before creating a role that depends on them.
+            try:
+                with env_path.open("x", encoding="utf-8") as env_file:
+                    env_file.write(
+                        f'DATABASE_URL="{database_url.render_as_string(hide_password=False)}"\n'
+                        "DATABASE_CONNECT_TIMEOUT=5\n"
+                    )
+            except OSError:
+                print("Could not save .env. No database objects were created.")
+                return 1
+
             connection.execute(
                 sql.SQL(
                     "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE"
@@ -90,28 +109,8 @@ def main() -> int:
             "Database setup failed. Check the server, port, password, and admin permissions. "
             "If setup partially completed, inspect the project role/database before retrying."
         )
-        return 1
-
-    database_url = URL.create(
-        "postgresql+psycopg",
-        username=ROLE_NAME,
-        password=app_password,
-        host=args.host,
-        port=args.port,
-        database=DATABASE_NAME,
-    )
-    try:
-        with env_path.open("x", encoding="utf-8") as env_file:
-            env_file.write(
-                f'DATABASE_URL="{database_url.render_as_string(hide_password=False)}"\n'
-                "DATABASE_CONNECT_TIMEOUT=5\n"
-            )
-    except OSError:
-        print(
-            "The database was created, but .env could not be written. "
-            "The generated password has not been displayed. "
-            "An administrator will need to reset the project role password and configure .env."
-        )
+        if env_path.exists():
+            print("Keep .env; it contains the generated credentials for recovering partial setup.")
         return 1
 
     print(f"Created database {DATABASE_NAME} and login {ROLE_NAME}.")

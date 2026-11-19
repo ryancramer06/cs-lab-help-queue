@@ -1,4 +1,5 @@
 from getpass import GetPassWarning
+from pathlib import Path
 import sys
 from unittest.mock import MagicMock, Mock
 import warnings
@@ -7,6 +8,7 @@ import psycopg
 import pytest
 
 from scripts import setup_database
+from app.config import Settings
 
 
 @pytest.fixture
@@ -110,3 +112,52 @@ def test_setup_connection_error_does_not_expose_password(
     output = capsys.readouterr()
     assert "private-admin-password" not in output.out + output.err
     assert not (setup_project / ".env").exists()
+
+
+def test_setup_does_not_create_database_objects_if_env_cannot_be_saved(
+    setup_project, monkeypatch, capsys
+):
+    monkeypatch.setattr(setup_database, "getpass", lambda prompt: "private-admin-password")
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    connection.execute.return_value.fetchone.return_value = None
+    monkeypatch.setattr(setup_database.psycopg, "connect", Mock(return_value=connection))
+    original_open = Path.open
+
+    def refuse_env_write(path, *args, **kwargs):
+        if path == setup_project / ".env":
+            raise PermissionError("Cannot write configuration")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", refuse_env_write)
+
+    assert setup_database.main() == 1
+    assert "No database objects were created" in capsys.readouterr().out
+    assert connection.execute.call_count == 2
+    assert all(
+        call.args[0].startswith("SELECT") for call in connection.execute.call_args_list
+    )
+
+
+def test_setup_preserves_credentials_after_partial_database_failure(
+    setup_project, monkeypatch, capsys
+):
+    monkeypatch.setattr(setup_database, "getpass", lambda prompt: "private-admin-password")
+    monkeypatch.setattr(setup_database.secrets, "token_urlsafe", lambda size: "generated-app-password")
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    connection.execute.side_effect = [
+        Mock(fetchone=Mock(return_value=None)),
+        Mock(fetchone=Mock(return_value=None)),
+        None,  # The role was created, but creating its database fails.
+        psycopg.OperationalError("generated-app-password"),
+    ]
+    monkeypatch.setattr(setup_database.psycopg, "connect", Mock(return_value=connection))
+
+    assert setup_database.main() == 1
+    configuration = Settings(_env_file=setup_project / ".env")
+    assert "generated-app-password" in configuration.database_url.get_secret_value()
+    output = capsys.readouterr().out
+    assert "Keep .env" in output
+    assert "generated-app-password" not in output
+    assert "private-admin-password" not in output
