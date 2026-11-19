@@ -4,6 +4,19 @@ from pydantic import ValidationError
 from app.config import Settings
 
 
+def test_database_url_is_required():
+    with pytest.raises(ValidationError) as error:
+        Settings(_env_file=None)
+
+    assert "database_url" in str(error.value)
+
+
+def test_connection_timeout_defaults_to_five_seconds(settings):
+    configuration = Settings(_env_file=None, database_url=settings.database_url)
+
+    assert configuration.database_connect_timeout == 5
+
+
 @pytest.mark.parametrize(
     "database_url",
     [

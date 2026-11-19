@@ -5,6 +5,13 @@ import pytest
 from app.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def isolate_settings_environment(monkeypatch):
+    # Tests supply configuration explicitly; integration tests use TEST_DATABASE_URL.
+    for variable in ("DATABASE_URL", "DATABASE_CONNECT_TIMEOUT"):
+        monkeypatch.delenv(variable, raising=False)
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
