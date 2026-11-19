@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from alembic import command
@@ -6,7 +7,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import IssueCategory, RequestStatus
-from app.requests import create_request, get_request
+from app.requests import create_request, get_request, list_requests
 from app.schemas import HelpRequestCreate
 
 
@@ -66,3 +67,40 @@ def test_creating_a_request_does_not_commit_the_callers_transaction(
     request_session.rollback()
 
     assert get_request(request_session, request_id) is None
+
+
+def test_list_requests_returns_an_empty_page_when_no_requests_exist(request_session):
+    assert list_requests(request_session) == []
+
+
+def test_list_requests_orders_by_creation_time_then_id(request_session, submission):
+    newest = create_request(request_session, submission)
+    first_waiting = create_request(request_session, submission)
+    second_waiting = create_request(request_session, submission)
+    earlier = datetime(2026, 11, 19, 12, tzinfo=timezone.utc)
+    newest.created_at = earlier + timedelta(minutes=1)
+    first_waiting.created_at = earlier
+    second_waiting.created_at = earlier
+    request_session.flush()
+
+    requests = list_requests(request_session)
+
+    assert [request.id for request in requests] == [
+        first_waiting.id, second_waiting.id, newest.id
+    ]
+
+
+def test_list_requests_respects_page_size_and_offset(request_session, submission):
+    requests = [create_request(request_session, submission) for _ in range(3)]
+
+    page = list_requests(request_session, limit=1, offset=1)
+
+    assert [request.id for request in page] == [requests[1].id]
+    assert len(list_requests(request_session, limit=100)) == 3
+    assert list_requests(request_session, offset=3) == []
+
+
+@pytest.mark.parametrize("pagination", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+def test_list_requests_rejects_invalid_pagination(request_session, pagination):
+    with pytest.raises(ValueError):
+        list_requests(request_session, **pagination)

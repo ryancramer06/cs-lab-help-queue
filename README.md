@@ -6,9 +6,9 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Early Phase 3: the backend foundation, help request model, and initial database
-migration are implemented. Request validation and database operations are next.
-Student and TA interfaces, API workflows, and analytics are planned for later phases.
+Phase 3: the backend foundation, database model and migration, submission
+validation, and basic database operations are implemented. Request API endpoints
+are next. Student and TA interfaces and analytics are planned for later phases.
 
 ## Planned features
 
@@ -82,6 +82,13 @@ Alembic tracks applied schema changes. The initial migration creates
 for creation, claiming, work starting, and resolution. Status and issue
 category are constrained to known values in PostgreSQL.
 
+Submission validation trims surrounding whitespace, rejects blank or oversized
+text, and keeps status, TA assignment, and timestamps under server control.
+The database helpers create requests, retrieve them by ID, and read pages of
+1-100 requests ordered by creation time and ID. They leave transaction commits
+to the caller so a failed operation can be rolled back. The API endpoints will
+use these helpers in Phase 4.
+
 ### Run the backend
 
 ```powershell
@@ -116,8 +123,9 @@ Remove-Item Env:TEST_DATABASE_URL
 
 PostgreSQL tests skip when `TEST_DATABASE_URL` is unset. Model and migration
 tests create temporary schemas inside transactions and roll them back after
-each test, including migration downgrade tests. Later phases will add request
-workflow tests. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
+each test, including migration downgrade tests. Database operation tests cover
+creation, retrieval, rollback, and page ordering. API workflow tests will be
+added with the endpoints. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
 as supported by the installed Starlette version.
 
 GitHub Actions runs the suite against a temporary PostgreSQL 18 service on
