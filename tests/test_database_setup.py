@@ -25,6 +25,23 @@ def test_setup_preserves_existing_env_without_asking_for_password(setup_project,
     password_prompt.assert_not_called()
 
 
+@pytest.mark.parametrize("port", ["0", "65536", "invalid"])
+def test_setup_rejects_invalid_port_before_asking_for_password(
+    setup_project, monkeypatch, capsys, port
+):
+    monkeypatch.setattr(sys, "argv", ["setup_database.py", "--port", port])
+    password_prompt = Mock(side_effect=AssertionError("Password should not be requested"))
+    monkeypatch.setattr(setup_database, "getpass", password_prompt)
+
+    with pytest.raises(SystemExit) as error:
+        setup_database.main()
+
+    assert error.value.code == 2
+    assert "--port" in capsys.readouterr().err
+    password_prompt.assert_not_called()
+    assert not (setup_project / ".env").exists()
+
+
 @pytest.mark.parametrize("existing_role,existing_database", [((1,), None), (None, (1,))])
 def test_setup_does_not_modify_existing_role_or_database(
     setup_project, monkeypatch, existing_role, existing_database

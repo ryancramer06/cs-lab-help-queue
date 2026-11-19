@@ -21,6 +21,8 @@ def main() -> int:
     parser.add_argument("--port", default=5432, type=int)
     parser.add_argument("--admin-user", default="postgres")
     args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error("--port must be between 1 and 65535")
 
     env_path = PROJECT_ROOT / ".env"
     if env_path.exists():
