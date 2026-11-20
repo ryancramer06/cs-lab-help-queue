@@ -58,6 +58,20 @@ def test_get_request_returns_none_for_a_missing_id(request_session):
     assert get_request(request_session, 999999) is None
 
 
+def test_request_creation_preserves_unicode_text(request_session, submission):
+    data = submission.model_dump()
+    data.update(student_name="Zoë Example", description="print('café')\n\t# Check λ here")
+    request = create_request(request_session, HelpRequestCreate.model_validate(data))
+    request_id = request.id
+    request_session.commit()
+    request_session.expunge_all()
+
+    stored = get_request(request_session, request_id)
+
+    assert stored.student_name == data["student_name"]
+    assert stored.description == data["description"]
+
+
 def test_creating_a_request_does_not_commit_the_callers_transaction(
     request_session, submission
 ):

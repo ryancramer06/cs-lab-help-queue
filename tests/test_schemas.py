@@ -85,3 +85,24 @@ def test_submission_rejects_non_text_names(submission):
 
     with pytest.raises(ValidationError):
         HelpRequestCreate.model_validate(submission)
+
+
+@pytest.mark.parametrize("field", ["student_name", "assignment", "description"])
+@pytest.mark.parametrize("value", ["text\x00with NUL", "text\ud800with an unpaired surrogate"])
+def test_submission_rejects_text_that_cannot_be_stored(submission, field, value):
+    submission[field] = value
+
+    with pytest.raises(ValidationError) as error:
+        HelpRequestCreate.model_validate(submission)
+
+    assert error.value.errors()[0]["loc"] == (field,)
+
+
+def test_submission_preserves_unicode_and_description_formatting(submission):
+    description = "print('café')\n\t# Check λ here"
+    submission.update(student_name="Zoë Example", description=description)
+
+    request = HelpRequestCreate.model_validate(submission)
+
+    assert request.student_name == "Zoë Example"
+    assert request.description == description
