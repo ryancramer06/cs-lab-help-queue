@@ -114,7 +114,14 @@ def test_list_requests_respects_page_size_and_offset(request_session, submission
     assert list_requests(request_session, offset=3) == []
 
 
-@pytest.mark.parametrize("pagination", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+@pytest.mark.parametrize(
+    "pagination",
+    [
+        {"limit": 0}, {"limit": 101}, {"offset": -1},
+        {"limit": True}, {"limit": 1.5}, {"limit": "1"}, {"limit": None},
+        {"offset": False}, {"offset": 1.5}, {"offset": "1"}, {"offset": None},
+    ],
+)
 def test_list_requests_rejects_invalid_pagination(request_session, pagination):
     with pytest.raises(ValueError):
         list_requests(request_session, **pagination)
