@@ -2,6 +2,7 @@
 
 import argparse
 from getpass import GetPassWarning, getpass
+import os
 from pathlib import Path
 import secrets
 import warnings
@@ -77,7 +78,13 @@ def main() -> int:
             )
             # Persist credentials before creating a role that depends on them.
             try:
-                with env_path.open("x", encoding="utf-8") as env_file:
+                # Set private Unix permissions at creation, before writing any credentials.
+                with open(
+                    env_path,
+                    "x",
+                    encoding="utf-8",
+                    opener=lambda path, flags: os.open(path, flags, 0o600),
+                ) as env_file:
                     env_file.write(
                         f'DATABASE_URL="{database_url.render_as_string(hide_password=False)}"\n'
                         "DATABASE_CONNECT_TIMEOUT=5\n"

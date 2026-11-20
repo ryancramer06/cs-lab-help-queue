@@ -59,6 +59,7 @@ save the admin password, overwrite `.env`, or change an existing project role
 or database. Use `--port` or `--admin-user` if your installation differs.
 Application credentials are saved before database objects are created. If setup
 reports a partial failure, keep `.env` so those credentials remain available.
+On Unix, new `.env` files have permissions restricted to their owner.
 
 Alternatively, create a dedicated login and database yourself, copy
 `.env.example` to `.env`, and replace the placeholders. URL-encode special

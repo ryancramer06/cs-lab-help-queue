@@ -1,5 +1,7 @@
 from getpass import GetPassWarning
+import os
 from pathlib import Path
+import stat
 import sys
 from unittest.mock import MagicMock, Mock
 import warnings
@@ -122,14 +124,14 @@ def test_setup_does_not_create_database_objects_if_env_cannot_be_saved(
     connection.__enter__.return_value = connection
     connection.execute.return_value.fetchone.return_value = None
     monkeypatch.setattr(setup_database.psycopg, "connect", Mock(return_value=connection))
-    original_open = Path.open
+    original_open = os.open
 
     def refuse_env_write(path, *args, **kwargs):
-        if path == setup_project / ".env":
+        if Path(path) == setup_project / ".env":
             raise PermissionError("Cannot write configuration")
         return original_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "open", refuse_env_write)
+    monkeypatch.setattr(setup_database.os, "open", refuse_env_write)
 
     assert setup_database.main() == 1
     assert "No database objects were created" in capsys.readouterr().out
@@ -161,3 +163,44 @@ def test_setup_preserves_credentials_after_partial_database_failure(
     assert "Keep .env" in output
     assert "generated-app-password" not in output
     assert "private-admin-password" not in output
+
+
+def test_setup_preserves_env_created_while_setup_is_running(
+    setup_project, monkeypatch, capsys
+):
+    monkeypatch.setattr(setup_database, "getpass", lambda prompt: "private-admin-password")
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    connection.execute.return_value.fetchone.return_value = None
+    monkeypatch.setattr(setup_database.psycopg, "connect", Mock(return_value=connection))
+    original_open = os.open
+    env_path = setup_project / ".env"
+
+    def create_env_before_exclusive_open(path, *args, **kwargs):
+        if Path(path) == env_path:
+            env_path.write_text("existing credentials\n", encoding="utf-8")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(setup_database.os, "open", create_env_before_exclusive_open)
+
+    assert setup_database.main() == 1
+    assert env_path.read_text(encoding="utf-8") == "existing credentials\n"
+    assert "No database objects were created" in capsys.readouterr().out
+    assert connection.execute.call_count == 2
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Unix permission bits do not model Windows ACLs")
+def test_setup_creates_env_with_owner_only_permissions(setup_project, monkeypatch):
+    monkeypatch.setattr(setup_database, "getpass", lambda prompt: "private-admin-password")
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    connection.execute.return_value.fetchone.return_value = None
+    monkeypatch.setattr(setup_database.psycopg, "connect", Mock(return_value=connection))
+
+    previous_umask = os.umask(0)
+    try:
+        assert setup_database.main() == 0
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE((setup_project / ".env").stat().st_mode) == 0o600
