@@ -1,12 +1,18 @@
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.schema import CreateSchema
+from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.database import create_database_engine
+from app.database import create_database_engine, get_session
+from app.main import create_app
 
 
 @pytest.fixture(autouse=True)
@@ -52,3 +58,38 @@ def isolated_postgres_connection(postgres_settings):
                 transaction.rollback()
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def migrated_postgres_connection(isolated_postgres_connection):
+    config = Config(Path(__file__).resolve().parents[1] / "alembic.ini")
+    config.attributes["connection"] = isolated_postgres_connection
+    command.upgrade(config, "head")
+    return isolated_postgres_connection
+
+
+@pytest.fixture
+def api_client(settings, migrated_postgres_connection):
+    application = create_app(settings)
+
+    def test_session():
+        with Session(
+            bind=migrated_postgres_connection,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+        ) as session:
+            yield session
+
+    application.dependency_overrides[get_session] = test_session
+    with TestClient(application) as client:
+        yield client
+
+
+@pytest.fixture
+def request_payload():
+    return {
+        "student_name": "Taylor Example",
+        "assignment": "Lab 3",
+        "issue_category": "debugging",
+        "description": "My loop never terminates.",
+    }

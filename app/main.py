@@ -1,15 +1,18 @@
 """FastAPI entry point and application health checks."""
 
 from contextlib import asynccontextmanager
+import json
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
+from app.api import router as request_router
 from app.database import create_database_engine, get_session
 
 
@@ -33,6 +36,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    application.include_router(request_router)
+
+    @application.exception_handler(RequestValidationError)
+    async def invalid_request(_, error: RequestValidationError) -> Response:
+        # Report the bad fields without echoing student text or exception objects.
+        details = [
+            {key: item[key] for key in ("loc", "msg", "type")}
+            for item in error.errors()
+        ]
+        return Response(
+            content=json.dumps({"detail": details}, ensure_ascii=True),
+            status_code=422,
+            media_type="application/json",
+        )
+
+    @application.exception_handler(SQLAlchemyError)
+    async def database_failure(_, error: SQLAlchemyError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Database unavailable. Please try again shortly."},
+        )
 
     @application.get("/health", tags=["Health"])
     def health(response: Response) -> dict[str, str]:

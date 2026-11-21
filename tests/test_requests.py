@@ -1,8 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-
-from alembic import command
-from alembic.config import Config
 import pytest
 from sqlalchemy.orm import Session
 
@@ -12,14 +8,10 @@ from app.schemas import HelpRequestCreate
 
 
 @pytest.fixture
-def request_session(isolated_postgres_connection):
-    config = Config(Path(__file__).resolve().parents[1] / "alembic.ini")
-    config.attributes["connection"] = isolated_postgres_connection
-    command.upgrade(config, "head")
-
+def request_session(migrated_postgres_connection):
     # Committing a session releases its savepoint; the outer test transaction still rolls back.
     with Session(
-        bind=isolated_postgres_connection,
+        bind=migrated_postgres_connection,
         join_transaction_mode="create_savepoint",
         expire_on_commit=False,
     ) as session:

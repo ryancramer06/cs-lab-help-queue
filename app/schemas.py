@@ -1,8 +1,8 @@
 """Validation for data entering the application."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
-from app.models import IssueCategory
+from app.models import IssueCategory, RequestStatus
 
 
 class HelpRequestCreate(BaseModel):
@@ -25,3 +25,19 @@ class HelpRequestCreate(BaseModel):
         except UnicodeEncodeError:
             raise ValueError("Text must contain valid Unicode characters") from None
         return value
+
+
+class HelpRequestRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_name: str
+    assignment: str
+    issue_category: IssueCategory
+    description: str
+    status: RequestStatus
+    assigned_ta: str | None
+    created_at: AwareDatetime
+    claimed_at: AwareDatetime | None
+    started_at: AwareDatetime | None
+    resolved_at: AwareDatetime | None
