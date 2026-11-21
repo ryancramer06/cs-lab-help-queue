@@ -17,6 +17,7 @@ def test_submit_and_retrieve_request(api_client, request_payload):
     response = api_client.post("/api/requests", json=request_payload)
 
     assert response.status_code == 201
+    assert response.headers["cache-control"] == "no-store"
     request = response.json()
     assert request["student_name"] == request_payload["student_name"]
     assert request["status"] == "pending"
@@ -37,6 +38,7 @@ def test_invalid_submission_returns_safe_validation_errors(
     )
 
     assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
     assert response.json()["detail"][0]["loc"] == ["body", "description"]
     assert "input" not in response.json()["detail"][0]
 
@@ -49,6 +51,7 @@ def test_submission_rejects_server_controlled_fields(api_client, request_payload
 def test_missing_request_returns_not_found(api_client):
     response = api_client.get("/api/requests/999999")
     assert response.status_code == 404
+    assert response.headers["cache-control"] == "no-store"
     assert response.json() == {"detail": "Help request not found"}
 
 
@@ -66,6 +69,7 @@ def test_failed_commit_does_not_return_success_or_expose_driver_details(settings
         response = client.post("/api/requests", json=request_payload)
 
     assert response.status_code == 503
+    assert response.headers["cache-control"] == "no-store"
     assert "private" not in response.text
 
 
@@ -89,6 +93,7 @@ def queue_records(api_client, request_payload, migrated_postgres_connection):
 def test_queue_lists_active_requests_with_page_totals(api_client, queue_records):
     response = api_client.get("/api/requests", params={"limit": 1, "offset": 1})
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     page = response.json()
     assert page["total"] == 2
     assert page["limit"] == 1 and page["offset"] == 1

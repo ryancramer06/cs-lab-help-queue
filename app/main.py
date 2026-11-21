@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import json
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -37,6 +37,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(request_router)
+
+    @application.middleware("http")
+    async def live_request_data(request: Request, call_next) -> Response:
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            # Queue state changes often, and responses contain student request details.
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @application.exception_handler(RequestValidationError)
     async def invalid_request(_, error: RequestValidationError) -> Response:
