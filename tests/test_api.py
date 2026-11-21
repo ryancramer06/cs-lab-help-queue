@@ -127,6 +127,23 @@ def test_empty_queue_returns_an_empty_page(api_client):
     assert response.json() == {"items": [], "total": 0, "limit": 100, "offset": 0}
 
 
+def test_queue_beyond_the_last_page_preserves_the_total(api_client, queue_records):
+    response = api_client.get("/api/requests", params={"offset": 50})
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 2, "limit": 100, "offset": 50}
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [{"assignment": "No matching assignment"}, {"issue_category": "conceptual"}, {"status": "in_progress"}],
+)
+def test_filters_without_matches_return_an_empty_page(api_client, queue_records, filters):
+    response = api_client.get("/api/requests", params=filters)
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 0
+
+
 @pytest.mark.parametrize(
     "query",
     [

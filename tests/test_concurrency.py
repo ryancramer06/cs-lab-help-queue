@@ -7,12 +7,14 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import event, func, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.config import Settings
 from app.database import create_database_engine
 from app.main import create_app
+from app.models import HelpRequest, RequestStatus
 
 
 @pytest.fixture
@@ -67,3 +69,40 @@ def test_only_one_of_two_simultaneous_http_claims_succeeds(concurrent_settings, 
         stored = client.get(f'/api/requests/{request["id"]}').json()
     assert stored["assigned_ta"] == winner["assigned_ta"]
     assert stored["claimed_at"] == winner["claimed_at"]
+
+
+def test_queue_rows_and_total_use_the_same_snapshot(concurrent_settings, request_payload):
+    application = create_app(concurrent_settings)
+    writer = create_database_engine(concurrent_settings)
+    changed = False
+
+    with TestClient(application) as client:
+        request = client.post("/api/requests", json=request_payload).json()
+        reader = application.state.session_factory.kw["bind"]
+
+        def resolve_after_queue_select(connection, cursor, statement, parameters, context, executemany):
+            nonlocal changed
+            if changed or "SELECT" not in statement or "help_requests" not in statement:
+                return
+            changed = True
+            # Commit a real change after the queue SELECT, before any separate count query.
+            with writer.begin() as other_connection:
+                other_connection.execute(
+                    update(HelpRequest).where(HelpRequest.id == request["id"]).values(
+                        status=RequestStatus.RESOLVED, resolved_at=func.clock_timestamp()
+                    )
+                )
+
+        event.listen(reader, "after_cursor_execute", resolve_after_queue_select)
+        try:
+            response = client.get("/api/requests")
+        finally:
+            event.remove(reader, "after_cursor_execute", resolve_after_queue_select)
+            writer.dispose()
+
+        assert changed
+        assert response.status_code == 200
+        page = response.json()
+        assert len(page["items"]) == page["total"] == 1
+        assert page["items"][0]["status"] == "pending"
+        assert client.get("/api/requests").json()["total"] == 0

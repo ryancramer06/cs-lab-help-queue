@@ -138,6 +138,7 @@ Only pending requests have a queue position, counted across all pages.
 Queue queries accept `assignment` (exact match), `issue_category`, and `status`,
 plus `limit` (1-100) and a non-negative `offset`. The response contains `items`,
 `total`, `limit`, and `offset`. The default queue excludes resolved requests;
+page rows and totals come from the same database snapshot during concurrent updates.
 use `?status=resolved` for history. Unsupported input returns 422, missing IDs
 return 404, conflicting actions return 409, and database failures return 503.
 

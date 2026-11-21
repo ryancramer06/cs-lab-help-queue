@@ -1,7 +1,7 @@
 """Database operations for help requests."""
 
-from sqlalchemy import Select, and_, func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, and_, func, or_, select, true, update
+from sqlalchemy.orm import Session, aliased
 
 from app.models import HelpRequest, IssueCategory, RequestStatus
 from app.schemas import HelpRequestCreate
@@ -26,11 +26,7 @@ def list_requests(
     status: RequestStatus | None = None, active_only: bool = False,
 ) -> list[HelpRequest]:
     """Return a bounded page of requests, ordered oldest first."""
-    # bool is an int subclass, and SQLAlchemy would silently truncate a float here.
-    if type(limit) is not int or not 1 <= limit <= 100:
-        raise ValueError("limit must be an integer between 1 and 100")
-    if type(offset) is not int or offset < 0:
-        raise ValueError("offset must be a non-negative integer")
+    _validate_pagination(limit, offset)
 
     # Requests can share a timestamp, so the ID keeps the ordering consistent between pages.
     statement = (
@@ -40,6 +36,14 @@ def list_requests(
         .offset(offset)
     )
     return list(session.scalars(statement))
+
+
+def _validate_pagination(limit: int, offset: int) -> None:
+    # bool is an int subclass, and SQLAlchemy would silently truncate a float here.
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValueError("limit must be an integer between 1 and 100")
+    if type(offset) is not int or offset < 0:
+        raise ValueError("offset must be a non-negative integer")
 
 
 def _filtered_requests(
@@ -58,14 +62,28 @@ def _filtered_requests(
     return statement
 
 
-def count_requests(
-    session: Session, *, assignment: str | None = None,
+def get_request_page(
+    session: Session, *, limit: int = 100, offset: int = 0,
+    assignment: str | None = None,
     issue_category: IssueCategory | None = None,
     status: RequestStatus | None = None, active_only: bool = False,
-) -> int:
-    # Share the predicates so the page total always uses the same filters as its rows.
-    statement = _filtered_requests(assignment, issue_category, status, active_only)
-    return session.scalar(select(func.count()).select_from(statement.subquery())) or 0
+) -> tuple[list[HelpRequest], int]:
+    _validate_pagination(limit, offset)
+    matching = _filtered_requests(assignment, issue_category, status, active_only).cte("matching_requests")
+    page = (
+        select(matching).order_by(matching.c.created_at, matching.c.id)
+        .limit(limit).offset(offset).subquery("request_page")
+    )
+    totals = select(func.count().label("total")).select_from(matching).subquery("request_totals")
+    request = aliased(HelpRequest, page)
+    # One statement gives both reads the same snapshot. Keep the count even if the page is empty.
+    statement = (
+        select(request, totals.c.total)
+        .select_from(totals.outerjoin(page, true()))
+        .order_by(request.created_at, request.id)
+    )
+    rows = session.execute(statement).all()
+    return [request for request, _ in rows if request is not None], rows[0][1]
 
 
 def get_queue_position(session: Session, request: HelpRequest) -> int | None:

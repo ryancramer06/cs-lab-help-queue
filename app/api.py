@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.models import HelpRequest
 from app.requests import (
-    claim_request, count_requests, create_request, get_queue_position, get_request, list_requests,
+    claim_request, create_request, get_queue_position, get_request, get_request_page,
     resolve_request, start_request,
 )
 from app.schemas import (
@@ -29,10 +29,10 @@ def read_queue(
     """List active requests by default; use status=resolved to view history."""
     filters = query.model_dump(exclude={"limit", "offset"})
     filters["active_only"] = query.status is None
-    requests = list_requests(session, limit=query.limit, offset=query.offset, **filters)
+    requests, total = get_request_page(session, limit=query.limit, offset=query.offset, **filters)
     return HelpRequestPage(
         items=[HelpRequestRead.model_validate(request) for request in requests],
-        total=count_requests(session, **filters), limit=query.limit, offset=query.offset,
+        total=total, limit=query.limit, offset=query.offset,
     )
 
 
