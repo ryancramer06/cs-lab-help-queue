@@ -12,11 +12,19 @@ from app.requests import (
     resolve_request, start_request,
 )
 from app.schemas import (
-    HelpRequestCreate, HelpRequestPage, HelpRequestRead, QueuePosition, RequestListQuery, TaAction,
+    ApiError, HelpRequestCreate, HelpRequestPage, HelpRequestRead, QueuePosition, RequestListQuery, TaAction,
 )
 
 
-router = APIRouter(prefix="/api/requests", tags=["Requests"])
+NOT_FOUND_RESPONSE = {404: {"model": ApiError, "description": "Help request not found"}}
+ACTION_ERROR_RESPONSES = {
+    **NOT_FOUND_RESPONSE,
+    409: {"model": ApiError, "description": "Request state or assigned TA conflicts with this action"},
+}
+router = APIRouter(
+    prefix="/api/requests", tags=["Requests"],
+    responses={503: {"model": ApiError, "description": "Database unavailable"}},
+)
 DatabaseSession = Annotated[Session, Depends(get_session)]
 # The primary key is a PostgreSQL INTEGER, so reject larger IDs before querying it.
 RequestId = Annotated[int, Path(ge=1, le=2**31 - 1)]
@@ -47,7 +55,7 @@ def submit_request(
     return request
 
 
-@router.get("/{request_id}", response_model=HelpRequestRead)
+@router.get("/{request_id}", response_model=HelpRequestRead, responses=NOT_FOUND_RESPONSE)
 def read_request(request_id: RequestId, session: DatabaseSession) -> HelpRequest:
     request = get_request(session, request_id)
     if request is None:
@@ -55,7 +63,7 @@ def read_request(request_id: RequestId, session: DatabaseSession) -> HelpRequest
     return request
 
 
-@router.get("/{request_id}/position", response_model=QueuePosition)
+@router.get("/{request_id}/position", response_model=QueuePosition, responses=NOT_FOUND_RESPONSE)
 def read_queue_position(request_id: RequestId, session: DatabaseSession) -> QueuePosition:
     request = get_request(session, request_id)
     if request is None:
@@ -77,16 +85,16 @@ def _save_action(
     return updated
 
 
-@router.post("/{request_id}/claim", response_model=HelpRequestRead)
+@router.post("/{request_id}/claim", response_model=HelpRequestRead, responses=ACTION_ERROR_RESPONSES)
 def claim(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
     return _save_action(session, request_id, claim_request(session, request_id, action.ta_name))
 
 
-@router.post("/{request_id}/start", response_model=HelpRequestRead)
+@router.post("/{request_id}/start", response_model=HelpRequestRead, responses=ACTION_ERROR_RESPONSES)
 def start(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
     return _save_action(session, request_id, start_request(session, request_id, action.ta_name))
 
 
-@router.post("/{request_id}/resolve", response_model=HelpRequestRead)
+@router.post("/{request_id}/resolve", response_model=HelpRequestRead, responses=ACTION_ERROR_RESPONSES)
 def resolve(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
     return _save_action(session, request_id, resolve_request(session, request_id, action.ta_name))
