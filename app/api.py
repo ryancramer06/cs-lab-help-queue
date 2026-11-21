@@ -2,18 +2,34 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.models import HelpRequest
-from app.requests import create_request, get_request
-from app.schemas import HelpRequestCreate, HelpRequestRead
+from app.requests import count_requests, create_request, get_queue_position, get_request, list_requests
+from app.schemas import (
+    HelpRequestCreate, HelpRequestPage, HelpRequestRead, QueuePosition, RequestListQuery,
+)
 
 
 router = APIRouter(prefix="/api/requests", tags=["Requests"])
 DatabaseSession = Annotated[Session, Depends(get_session)]
 RequestId = Annotated[int, Path(ge=1)]
+
+
+@router.get("", response_model=HelpRequestPage)
+def read_queue(
+    query: Annotated[RequestListQuery, Query()], session: DatabaseSession
+) -> HelpRequestPage:
+    """List active requests by default; use status=resolved to view history."""
+    filters = query.model_dump(exclude={"limit", "offset"})
+    filters["active_only"] = query.status is None
+    requests = list_requests(session, limit=query.limit, offset=query.offset, **filters)
+    return HelpRequestPage(
+        items=[HelpRequestRead.model_validate(request) for request in requests],
+        total=count_requests(session, **filters), limit=query.limit, offset=query.offset,
+    )
 
 
 @router.post("", response_model=HelpRequestRead, status_code=201)
@@ -33,3 +49,11 @@ def read_request(request_id: RequestId, session: DatabaseSession) -> HelpRequest
     if request is None:
         raise HTTPException(status_code=404, detail="Help request not found")
     return request
+
+
+@router.get("/{request_id}/position", response_model=QueuePosition)
+def read_queue_position(request_id: RequestId, session: DatabaseSession) -> QueuePosition:
+    request = get_request(session, request_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Help request not found")
+    return QueuePosition(request_id=request.id, position=get_queue_position(session, request))

@@ -1,9 +1,9 @@
 """Database operations for help requests."""
 
-from sqlalchemy import select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import HelpRequest
+from app.models import HelpRequest, IssueCategory, RequestStatus
 from app.schemas import HelpRequestCreate
 
 
@@ -21,7 +21,9 @@ def get_request(session: Session, request_id: int) -> HelpRequest | None:
 
 
 def list_requests(
-    session: Session, *, limit: int = 100, offset: int = 0
+    session: Session, *, limit: int = 100, offset: int = 0,
+    assignment: str | None = None, issue_category: IssueCategory | None = None,
+    status: RequestStatus | None = None, active_only: bool = False,
 ) -> list[HelpRequest]:
     """Return a bounded page of requests, ordered oldest first."""
     # bool is an int subclass, and SQLAlchemy would silently truncate a float here.
@@ -32,9 +34,50 @@ def list_requests(
 
     # Requests can share a timestamp, so the ID keeps the ordering consistent between pages.
     statement = (
-        select(HelpRequest)
+        _filtered_requests(assignment, issue_category, status, active_only)
         .order_by(HelpRequest.created_at, HelpRequest.id)
         .limit(limit)
         .offset(offset)
     )
     return list(session.scalars(statement))
+
+
+def _filtered_requests(
+    assignment: str | None, issue_category: IssueCategory | None,
+    status: RequestStatus | None, active_only: bool,
+) -> Select[tuple[HelpRequest]]:
+    statement = select(HelpRequest)
+    if assignment is not None:
+        statement = statement.where(HelpRequest.assignment == assignment)
+    if issue_category is not None:
+        statement = statement.where(HelpRequest.issue_category == issue_category)
+    if status is not None:
+        statement = statement.where(HelpRequest.status == status)
+    if active_only:
+        statement = statement.where(HelpRequest.status != RequestStatus.RESOLVED)
+    return statement
+
+
+def count_requests(
+    session: Session, *, assignment: str | None = None,
+    issue_category: IssueCategory | None = None,
+    status: RequestStatus | None = None, active_only: bool = False,
+) -> int:
+    # Share the predicates so the page total always uses the same filters as its rows.
+    statement = _filtered_requests(assignment, issue_category, status, active_only)
+    return session.scalar(select(func.count()).select_from(statement.subquery())) or 0
+
+
+def get_queue_position(session: Session, request: HelpRequest) -> int | None:
+    if request.status != RequestStatus.PENDING:
+        return None
+    earlier = or_(
+        HelpRequest.created_at < request.created_at,
+        and_(HelpRequest.created_at == request.created_at, HelpRequest.id < request.id),
+    )
+    waiting_ahead = session.scalar(
+        select(func.count()).select_from(HelpRequest).where(
+            HelpRequest.status == RequestStatus.PENDING, earlier
+        )
+    )
+    return (waiting_ahead or 0) + 1

@@ -3,11 +3,13 @@ from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 import pytest
 
 from app.database import get_session
 from app.main import create_app
+from app.models import HelpRequest, RequestStatus
 
 
 def test_submit_and_retrieve_request(api_client, request_payload):
@@ -64,3 +66,69 @@ def test_failed_commit_does_not_return_success_or_expose_driver_details(settings
 
     assert response.status_code == 503
     assert "private" not in response.text
+
+
+@pytest.fixture
+def queue_records(api_client, request_payload, migrated_postgres_connection):
+    first = api_client.post("/api/requests", json=request_payload).json()
+    second = api_client.post(
+        "/api/requests", json={**request_payload, "assignment": "Lab 4", "issue_category": "environment"}
+    ).json()
+    resolved = api_client.post(
+        "/api/requests", json={**request_payload, "issue_category": "syntax"}
+    ).json()
+    migrated_postgres_connection.execute(
+        update(HelpRequest).where(HelpRequest.id == resolved["id"]).values(
+            status=RequestStatus.RESOLVED, resolved_at=func.now()
+        )
+    )
+    return first, second, resolved
+
+
+def test_queue_lists_active_requests_with_page_totals(api_client, queue_records):
+    response = api_client.get("/api/requests", params={"limit": 1, "offset": 1})
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 2
+    assert page["limit"] == 1 and page["offset"] == 1
+    assert [item["id"] for item in page["items"]] == [queue_records[1]["id"]]
+
+
+def test_queue_filters_combine_and_trim_assignment(api_client, queue_records):
+    response = api_client.get(
+        "/api/requests", params={"assignment": " Lab 3 ", "issue_category": "debugging", "status": "pending"}
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["id"] == queue_records[0]["id"]
+
+
+def test_resolved_requests_remain_available_in_history(api_client, queue_records):
+    response = api_client.get("/api/requests", params={"status": "resolved"})
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["id"] == queue_records[2]["id"]
+
+
+def test_empty_queue_returns_an_empty_page(api_client):
+    response = api_client.get("/api/requests")
+    assert response.json() == {"items": [], "total": 0, "limit": 100, "offset": 0}
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"limit": 0}, {"limit": 101}, {"offset": -1}, {"offset": 2**63},
+        {"status": "unknown"}, {"issue_category": "unknown"},
+        {"assignment": "   "}, {"unexpected": "value"},
+    ],
+)
+def test_invalid_queue_filters_are_rejected(api_client, query):
+    assert api_client.get("/api/requests", params=query).status_code == 422
+
+
+def test_position_counts_pending_requests_across_pages(api_client, queue_records):
+    for position, request in enumerate(queue_records[:2], start=1):
+        response = api_client.get(f'/api/requests/{request["id"]}/position')
+        assert response.json() == {"request_id": request["id"], "position": position}
+    resolved = queue_records[2]
+    assert api_client.get(f'/api/requests/{resolved["id"]}/position').json()["position"] is None
