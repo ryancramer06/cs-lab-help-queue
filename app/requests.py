@@ -97,3 +97,36 @@ def claim_request(session: Session, request_id: int, ta_name: str) -> HelpReques
         .execution_options(populate_existing=True)
     )
     return session.scalar(statement)
+
+
+def start_request(session: Session, request_id: int, ta_name: str) -> HelpRequest | None:
+    statement = (
+        update(HelpRequest)
+        .where(
+            HelpRequest.id == request_id,
+            HelpRequest.status == RequestStatus.PENDING,
+            HelpRequest.assigned_ta == ta_name,
+            HelpRequest.claimed_at.is_not(None),
+            HelpRequest.started_at.is_(None),
+        )
+        .values(status=RequestStatus.IN_PROGRESS, started_at=func.clock_timestamp())
+        .returning(HelpRequest)
+        .execution_options(populate_existing=True)
+    )
+    return session.scalar(statement)
+
+
+def resolve_request(session: Session, request_id: int, ta_name: str) -> HelpRequest | None:
+    statement = (
+        update(HelpRequest)
+        .where(
+            HelpRequest.id == request_id,
+            HelpRequest.status == RequestStatus.IN_PROGRESS,
+            HelpRequest.assigned_ta == ta_name,
+            HelpRequest.started_at.is_not(None),
+        )
+        .values(status=RequestStatus.RESOLVED, resolved_at=func.clock_timestamp())
+        .returning(HelpRequest)
+        .execution_options(populate_existing=True)
+    )
+    return session.scalar(statement)

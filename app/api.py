@@ -9,6 +9,7 @@ from app.database import get_session
 from app.models import HelpRequest
 from app.requests import (
     claim_request, count_requests, create_request, get_queue_position, get_request, list_requests,
+    resolve_request, start_request,
 )
 from app.schemas import (
     HelpRequestCreate, HelpRequestPage, HelpRequestRead, QueuePosition, RequestListQuery, TaAction,
@@ -78,3 +79,13 @@ def _save_action(
 @router.post("/{request_id}/claim", response_model=HelpRequestRead)
 def claim(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
     return _save_action(session, request_id, claim_request(session, request_id, action.ta_name))
+
+
+@router.post("/{request_id}/start", response_model=HelpRequestRead)
+def start(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
+    return _save_action(session, request_id, start_request(session, request_id, action.ta_name))
+
+
+@router.post("/{request_id}/resolve", response_model=HelpRequestRead)
+def resolve(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
+    return _save_action(session, request_id, resolve_request(session, request_id, action.ta_name))

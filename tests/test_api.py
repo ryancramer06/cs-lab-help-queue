@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
@@ -170,3 +171,60 @@ def test_invalid_ta_names_are_rejected(api_client, request_payload, ta_name):
         headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 422
+
+
+def test_complete_request_workflow_updates_positions_and_history(api_client, request_payload):
+    first = api_client.post("/api/requests", json=request_payload).json()
+    second = api_client.post("/api/requests", json=request_payload).json()
+    path = f'/api/requests/{first["id"]}'
+    actor = {"ta_name": "Alex Example"}
+    assert api_client.post(f"{path}/claim", json=actor).status_code == 200
+
+    started = api_client.post(f"{path}/start", json=actor)
+    assert started.status_code == 200
+    assert started.json()["status"] == "in_progress"
+    assert api_client.get(f"{path}/position").json()["position"] is None
+    assert api_client.get(f'/api/requests/{second["id"]}/position').json()["position"] == 1
+    assert api_client.get("/api/requests", params={"status": "in_progress"}).json()["total"] == 1
+
+    resolved = api_client.post(f"{path}/resolve", json=actor)
+    assert resolved.status_code == 200
+    record = resolved.json()
+    assert record["status"] == "resolved"
+    times = [datetime.fromisoformat(record[key]) for key in (
+        "created_at", "claimed_at", "started_at", "resolved_at"
+    )]
+    assert times == sorted(times)
+    assert api_client.get(path).json() == record
+    assert api_client.get("/api/requests").json()["items"][0]["id"] == second["id"]
+    assert api_client.get("/api/requests", params={"status": "resolved"}).json()["items"][0]["id"] == first["id"]
+
+
+@pytest.mark.parametrize("action", ["start", "resolve"])
+def test_unclaimed_requests_cannot_be_started_or_resolved(api_client, request_payload, action):
+    request = api_client.post("/api/requests", json=request_payload).json()
+    path = f'/api/requests/{request["id"]}'
+    assert api_client.post(f"{path}/{action}", json={"ta_name": "Alex Example"}).status_code == 409
+    assert api_client.get(path).json() == request
+
+
+def test_actions_enforce_owner_and_prevent_repeated_transitions(api_client, request_payload):
+    request = api_client.post("/api/requests", json=request_payload).json()
+    path = f'/api/requests/{request["id"]}'
+    owner, other = {"ta_name": "Alex Example"}, {"ta_name": "Jordan Example"}
+    api_client.post(f"{path}/claim", json=owner)
+    assert api_client.post(f"{path}/resolve", json=owner).status_code == 409
+    assert api_client.post(f"{path}/start", json=other).status_code == 409
+    started = api_client.post(f"{path}/start", json=owner).json()
+    assert api_client.post(f"{path}/claim", json=other).status_code == 409
+    assert api_client.post(f"{path}/start", json=owner).status_code == 409
+    assert api_client.post(f"{path}/resolve", json=other).status_code == 409
+    assert api_client.get(path).json() == started
+    resolved = api_client.post(f"{path}/resolve", json=owner).json()
+    assert api_client.post(f"{path}/resolve", json=owner).status_code == 409
+    assert api_client.get(path).json() == resolved
+
+
+@pytest.mark.parametrize("action", ["start", "resolve"])
+def test_actions_on_missing_requests_return_not_found(api_client, action):
+    assert api_client.post(f"/api/requests/999999/{action}", json={"ta_name": "Alex Example"}).status_code == 404
