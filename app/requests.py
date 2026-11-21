@@ -1,6 +1,6 @@
 """Database operations for help requests."""
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import HelpRequest, IssueCategory, RequestStatus
@@ -81,3 +81,19 @@ def get_queue_position(session: Session, request: HelpRequest) -> int | None:
         )
     )
     return (waiting_ahead or 0) + 1
+
+
+def claim_request(session: Session, request_id: int, ta_name: str) -> HelpRequest | None:
+    # Check and assign in one UPDATE. Two TAs must never both pass a separate read check.
+    statement = (
+        update(HelpRequest)
+        .where(
+            HelpRequest.id == request_id,
+            HelpRequest.status == RequestStatus.PENDING,
+            HelpRequest.assigned_ta.is_(None),
+        )
+        .values(assigned_ta=ta_name, claimed_at=func.clock_timestamp())
+        .returning(HelpRequest)
+        .execution_options(populate_existing=True)
+    )
+    return session.scalar(statement)

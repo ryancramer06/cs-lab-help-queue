@@ -132,3 +132,41 @@ def test_position_counts_pending_requests_across_pages(api_client, queue_records
         assert response.json() == {"request_id": request["id"], "position": position}
     resolved = queue_records[2]
     assert api_client.get(f'/api/requests/{resolved["id"]}/position').json()["position"] is None
+
+
+def test_claim_assigns_a_ta_without_starting_work(api_client, request_payload):
+    request = api_client.post("/api/requests", json=request_payload).json()
+    response = api_client.post(f'/api/requests/{request["id"]}/claim', json={"ta_name": " Alex Example "})
+
+    assert response.status_code == 200
+    assert response.json()["assigned_ta"] == "Alex Example"
+    assert response.json()["claimed_at"] is not None
+    assert response.json()["started_at"] is None
+    assert response.json()["status"] == "pending"
+    assert api_client.get(f'/api/requests/{request["id"]}/position').json()["position"] == 1
+
+
+def test_duplicate_claims_do_not_change_the_owner_or_timestamp(api_client, request_payload):
+    request = api_client.post("/api/requests", json=request_payload).json()
+    path = f'/api/requests/{request["id"]}'
+    claimed = api_client.post(f"{path}/claim", json={"ta_name": "Alex Example"}).json()
+
+    for ta_name in ("Alex Example", "Jordan Example"):
+        assert api_client.post(f"{path}/claim", json={"ta_name": ta_name}).status_code == 409
+    assert api_client.get(path).json() == claimed
+
+
+def test_missing_or_resolved_requests_cannot_be_claimed(api_client, queue_records):
+    assert api_client.post("/api/requests/999999/claim", json={"ta_name": "Alex Example"}).status_code == 404
+    resolved = queue_records[2]
+    assert api_client.post(f'/api/requests/{resolved["id"]}/claim', json={"ta_name": "Alex Example"}).status_code == 409
+
+
+@pytest.mark.parametrize("ta_name", [" ", "bad\x00name", "bad\ud800name", "a" * 101])
+def test_invalid_ta_names_are_rejected(api_client, request_payload, ta_name):
+    request = api_client.post("/api/requests", json=request_payload).json()
+    response = api_client.post(
+        f'/api/requests/{request["id"]}/claim', content=json.dumps({"ta_name": ta_name}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422

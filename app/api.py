@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.models import HelpRequest
-from app.requests import count_requests, create_request, get_queue_position, get_request, list_requests
+from app.requests import (
+    claim_request, count_requests, create_request, get_queue_position, get_request, list_requests,
+)
 from app.schemas import (
-    HelpRequestCreate, HelpRequestPage, HelpRequestRead, QueuePosition, RequestListQuery,
+    HelpRequestCreate, HelpRequestPage, HelpRequestRead, QueuePosition, RequestListQuery, TaAction,
 )
 
 
@@ -57,3 +59,22 @@ def read_queue_position(request_id: RequestId, session: DatabaseSession) -> Queu
     if request is None:
         raise HTTPException(status_code=404, detail="Help request not found")
     return QueuePosition(request_id=request.id, position=get_queue_position(session, request))
+
+
+def _save_action(
+    session: Session, request_id: int, updated: HelpRequest | None
+) -> HelpRequest:
+    if updated is None:
+        if get_request(session, request_id) is None:
+            raise HTTPException(status_code=404, detail="Help request not found")
+        raise HTTPException(
+            status_code=409,
+            detail="The request's state or assigned TA does not allow this action.",
+        )
+    session.commit()
+    return updated
+
+
+@router.post("/{request_id}/claim", response_model=HelpRequestRead)
+def claim(request_id: RequestId, action: TaAction, session: DatabaseSession) -> HelpRequest:
+    return _save_action(session, request_id, claim_request(session, request_id, action.ta_name))
