@@ -55,8 +55,15 @@ def test_missing_request_returns_not_found(api_client):
     assert response.json() == {"detail": "Help request not found"}
 
 
-def test_request_id_must_be_positive(api_client):
-    assert api_client.get("/api/requests/0").status_code == 422
+@pytest.mark.parametrize("request_id", [0, 2**31, 10**100])
+@pytest.mark.parametrize("action", [None, "position", "claim", "start", "resolve"])
+def test_request_id_must_fit_the_database_key_range(api_client, request_id, action):
+    path = f"/api/requests/{request_id}"
+    if action in ("claim", "start", "resolve"):
+        response = api_client.post(f"{path}/{action}", json={"ta_name": "Alex Example"})
+    else:
+        response = api_client.get(f"{path}/{action}" if action else path)
+    assert response.status_code == 422
 
 
 def test_failed_commit_does_not_return_success_or_expose_driver_details(settings, request_payload):

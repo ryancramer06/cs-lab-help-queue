@@ -18,7 +18,8 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/requests", tags=["Requests"])
 DatabaseSession = Annotated[Session, Depends(get_session)]
-RequestId = Annotated[int, Path(ge=1)]
+# The primary key is a PostgreSQL INTEGER, so reject larger IDs before querying it.
+RequestId = Annotated[int, Path(ge=1, le=2**31 - 1)]
 
 
 @router.get("", response_model=HelpRequestPage)
