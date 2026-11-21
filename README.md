@@ -6,16 +6,17 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Phase 3: the backend foundation, database model and migration, submission
-validation, and basic database operations are implemented. Request API endpoints
-are next. Student and TA interfaces and analytics are planned for later phases.
+Phase 4: the request API supports submission, queue retrieval, filtering,
+position tracking, atomic claiming, and start/resolve actions. Student and TA
+browser interfaces and analytics are planned for later phases.
 
-## Planned features
+## Features
 
-- Student help requests with assignment, category, description, and queue position.
-- TA tools to claim, filter, and resolve requests without duplicate claims.
-- Analytics for wait times, resolution times, assignments, and common issues.
-- A responsive interface with clear loading, empty, success, and error states.
+- Validated help request submission and queue-position tracking through the API.
+- Assignment, category, and status filters, including resolved request history.
+- Atomic claiming and guarded start/resolve actions with lifecycle timestamps.
+
+Browser interfaces and an analytics dashboard will be added in the next phases.
 
 ## Stack
 
@@ -87,8 +88,8 @@ Submission validation trims surrounding whitespace, rejects blank or oversized
 text, and keeps status, TA assignment, and timestamps under server control.
 The database helpers create requests, retrieve them by ID, and read pages of
 1-100 requests ordered by creation time and ID. They leave transaction commits
-to the caller so a failed operation can be rolled back. The API endpoints will
-use these helpers in Phase 4.
+to the caller so a failed operation can be rolled back. API write endpoints
+commit before returning a successful response.
 
 ### Run the backend
 
@@ -106,6 +107,44 @@ uses a separate SQLAlchemy session, which closes after the response. Health
 responses do not expose connection details. The frontend will be served by
 this application in Phase 5. There is no page at `/` yet.
 
+### Request API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/requests` | Submit a help request; returns 201 and its Location header |
+| GET | `/api/requests` | List a filtered page of requests |
+| GET | `/api/requests/{id}` | Read request details and status |
+| GET | `/api/requests/{id}/position` | Read its position among pending requests |
+| POST | `/api/requests/{id}/claim` | Assign an unclaimed pending request to a TA |
+| POST | `/api/requests/{id}/start` | Start work on the assigned request |
+| POST | `/api/requests/{id}/resolve` | Resolve a request that is in progress |
+
+Try the endpoints in `/docs`. Start with this fictional submission:
+
+```json
+{
+  "student_name": "Taylor Example",
+  "assignment": "Lab 3",
+  "issue_category": "debugging",
+  "description": "My loop never terminates."
+}
+```
+
+Copy the returned ID, then call claim, start, and resolve in that order. Each
+action takes `{"ta_name": "Alex Example"}`. Claiming keeps the request pending;
+starting work changes it to `in_progress`, and resolving changes it to `resolved`.
+Only pending requests have a queue position, counted across all pages.
+
+Queue queries accept `assignment` (exact match), `issue_category`, and `status`,
+plus `limit` (1-100) and a non-negative `offset`. The response contains `items`,
+`total`, `limit`, and `offset`. The default queue excludes resolved requests;
+use `?status=resolved` for history. Unsupported input returns 422, missing IDs
+return 404, conflicting actions return 409, and database failures return 503.
+
+TA actions currently use a supplied display name and check it against the
+recorded assignee. There is no login or authentication yet; this is a local
+development/demo workflow. Authentication and public-demo safeguards are future work.
+
 ### Tests
 
 ```powershell
@@ -122,11 +161,13 @@ $env:TEST_DATABASE_URL = 'postgresql+psycopg://test_user:replace_me@localhost:54
 Remove-Item Env:TEST_DATABASE_URL
 ```
 
-PostgreSQL tests skip when `TEST_DATABASE_URL` is unset. Model and migration
-tests create temporary schemas inside transactions and roll them back after
-each test, including migration downgrade tests. Database operation tests cover
-creation, retrieval, rollback, and page ordering. API workflow tests will be
-added with the endpoints. The test client uses [HTTPX2](https://www.starlette.io/testclient/),
+PostgreSQL tests skip when `TEST_DATABASE_URL` is unset. Most use temporary
+schemas inside transactions and roll them back after each test, including
+migration downgrade tests. The concurrency test uses a committed temporary
+schema so independent connections can compete, then removes that schema.
+Tests cover validation, persistence, filters, positions, status transitions,
+and two simultaneous HTTP claim attempts. The test client uses
+[HTTPX2](https://www.starlette.io/testclient/),
 as supported by the installed Starlette version.
 
 GitHub Actions runs the suite against a temporary PostgreSQL 18 service on
