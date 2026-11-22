@@ -2,11 +2,13 @@
 
 from contextlib import asynccontextmanager
 import json
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -37,6 +39,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(request_router)
+    static_directory = Path(__file__).resolve().parent / "static"
+    application.mount("/static", StaticFiles(directory=static_directory), name="static")
+
+    @application.get("/", response_class=FileResponse, include_in_schema=False)
+    def student_page() -> FileResponse:
+        return FileResponse(static_directory / "index.html", headers={"Cache-Control": "no-cache"})
 
     @application.middleware("http")
     async def live_request_data(request: Request, call_next) -> Response:
