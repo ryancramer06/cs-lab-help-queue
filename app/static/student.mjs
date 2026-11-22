@@ -13,6 +13,7 @@ const state = {
   trackedRequest: null, trackingLoading: false, trackingVersion: 0,
 };
 let refreshTimer;
+let lastAnnouncement = "";
 
 function updatePageButtons() {
   element("previous-page").disabled = state.queueLoading || state.offset === 0;
@@ -23,8 +24,9 @@ function updatePageButtons() {
 function renderQueue() {
   element("queue-list").replaceChildren(...state.queue.map((request) => queueItem(request, state.trackedId)));
   element("queue-count").textContent = String(state.total);
+  element("queue-labels").hidden = state.total === 0;
   element("queue-empty").hidden = state.total !== 0;
-  element("page-summary").textContent = state.total === 0 ? "No active requests" :
+  element("page-summary").textContent = state.total === 0 ? "0 requests" :
     `Showing ${state.visibleOffset + 1}–${state.visibleOffset + state.queue.length} of ${state.total}`;
 }
 
@@ -136,6 +138,14 @@ function renderTracking(request, position) {
     request.status === "in_progress" ? `${ta} is helping you. Keep your code ready.` :
     request.assigned_ta ? `${ta} has claimed your request and will start shortly.` :
     "You’re in the queue. Keep working while you wait.";
+  const announcement = `Request #${request.id}: ${element("tracked-status").textContent}.${
+    request.status === "pending" && position !== null ? ` Queue position ${position}.` : ""
+  }`;
+  // Announce meaningful changes, rather than reading out the waiting clock every poll.
+  if (announcement !== lastAnnouncement) {
+    element("tracking-announcement").textContent = announcement;
+    lastAnnouncement = announcement;
+  }
 }
 
 function clearTracking() {
@@ -149,6 +159,9 @@ function clearTracking() {
   element("tracking-empty").textContent = "After you join, your status and queue position will appear here.";
   element("stop-tracking").hidden = true;
   element("track-button").disabled = false;
+  element("track-button").textContent = "Track";
+  element("tracking-announcement").textContent = "";
+  lastAnnouncement = "";
   element("request-id").value = "";
   if (state.hasLoaded) renderQueue();
   updateFormState();
@@ -159,6 +172,7 @@ async function refreshTracking(id = state.trackedId, manual = false) {
   const version = ++state.trackingVersion;
   state.trackingLoading = true;
   element("track-button").disabled = true;
+  if (manual || !state.trackedRequest) element("track-button").textContent = "Loading…";
   try {
     const request = await apiRequest(`/api/requests/${id}`);
     let position = null;
@@ -189,6 +203,7 @@ async function refreshTracking(id = state.trackedId, manual = false) {
     if (version === state.trackingVersion) {
       state.trackingLoading = false;
       element("track-button").disabled = false;
+      element("track-button").textContent = "Track";
     }
   }
 }
@@ -235,6 +250,8 @@ form.addEventListener("submit", async (event) => {
     showMessage(element("form-message"), `Request #${request.id} submitted. You’re in the queue.`, "success");
     state.offset = 0;
     await refreshAll();
+    element("tracking-title").focus({ preventScroll: true });
+    element("tracking").scrollIntoView({ block: "nearest" });
   } catch (error) {
     firstInvalid = displayFieldErrors(error.details || []);
     showMessage(element("form-message"), error.status === 0 ?
