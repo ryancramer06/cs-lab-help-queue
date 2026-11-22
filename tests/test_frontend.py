@@ -7,12 +7,15 @@ def test_student_page_and_styles_are_served_without_a_database(settings):
     with TestClient(create_app(settings)) as client:
         page = client.get("/")
         stylesheet = client.get("/static/styles.css")
+        script = client.get("/static/student.mjs")
 
     assert page.status_code == 200
     assert page.headers["content-type"].startswith("text/html")
     assert "CS Lab Help Queue" in page.text
     assert stylesheet.status_code == 200
     assert stylesheet.headers["content-type"].startswith("text/css")
+    assert script.status_code == 200
+    assert "javascript" in script.headers["content-type"]
 
 
 def test_frontend_paths_do_not_depend_on_the_working_directory(settings, tmp_path, monkeypatch):
