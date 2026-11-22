@@ -6,9 +6,9 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Phase 5: students can submit requests, view the live queue, and follow status
-and position updates in a responsive browser interface. The request API is
-implemented; the TA interface and analytics are planned for later phases.
+Phase 6: students can submit and track requests, and TAs can manage the queue
+through a responsive browser workspace. The request API and both interfaces
+are implemented. Analytics is the next planned phase.
 
 ## Features
 
@@ -16,8 +16,9 @@ implemented; the TA interface and analytics are planned for later phases.
 - Request tracking with status, queue position, waiting time, and reload restoration.
 - Assignment, category, and status filters, including resolved request history.
 - Atomic claiming and guarded start/resolve actions with lifecycle timestamps.
+- TA workspace with assignment controls, wait times, filters, and resolved history.
 
-The TA management interface and analytics dashboard will be added in the next phases.
+The analytics dashboard is planned for Phase 7.
 
 ## Stack
 
@@ -99,6 +100,7 @@ commit before returning a successful response.
 ```
 
 - [Student page](http://127.0.0.1:8000/): submit a request and follow the queue.
+- [TA workspace](http://127.0.0.1:8000/ta): claim, start, and resolve requests.
 - [API documentation](http://127.0.0.1:8000/docs): explore the endpoints and test TA actions.
 - [Liveness](http://127.0.0.1:8000/health): returns HTTP 200 when the app is running.
 - [Readiness](http://127.0.0.1:8000/health/ready): executes `SELECT 1` against
@@ -125,6 +127,29 @@ submissions. It becomes available after resolution or after stopping tracking.
 
 Connection errors preserve the form. If submission could not be confirmed,
 check the queue before retrying; the app never automatically retries a POST.
+
+### TA workflow
+
+Open the TA workspace, enter a display name, and choose **Use name**. The name
+is remembered in this tab's session storage and restored after a reload.
+Claim an unassigned request, choose **Start work** when help begins, then
+**Resolve** when finished. Assigned requests show their TA, and actions are
+available only when they match the current name and request status.
+
+Filter by assignment (exact match), issue category, or status. Choose
+**Resolved history** to view completed requests and their resolution times.
+The list has ten requests per page and updates every 15 seconds while visible.
+Waiting time runs from submission until work starts; claiming alone does not
+stop the clock.
+
+The server checks every action against the current database state. If another
+TA claims a request first, the page reports the conflict and reloads the list.
+Connection failures preserve the last results and disable actions until a
+refresh succeeds. Writes are never retried automatically.
+
+Display names are a local demo convenience, not authentication. Anyone can
+enter another name; use fictional information while developing this version.
+Authentication and public-demo safeguards are still future work.
 
 ### Request API
 
@@ -193,8 +218,9 @@ as supported by the installed Starlette version.
 
 GitHub Actions runs the suite against a temporary PostgreSQL 18 service on
 pushes to `main` and pull requests targeting `main`.
-For frontend changes, also check submission, pagination, reload tracking,
-connection recovery, and the layout at desktop and mobile widths in a browser.
+For frontend changes, also check student submission and tracking, TA claiming
+through resolution, filters and history, competing claims, pagination, reload
+restoration, connection recovery, and desktop/mobile layouts in a browser.
 
 ## Roadmap
 
