@@ -6,17 +6,18 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Phase 4: the request API supports submission, queue retrieval, filtering,
-position tracking, atomic claiming, and start/resolve actions. Student and TA
-browser interfaces and analytics are planned for later phases.
+Phase 5: students can submit requests, view the live queue, and follow status
+and position updates in a responsive browser interface. The request API is
+implemented; the TA interface and analytics are planned for later phases.
 
 ## Features
 
-- Validated help request submission and queue-position tracking through the API.
+- Student request form with validation, submission feedback, and live queue updates.
+- Request tracking with status, queue position, waiting time, and reload restoration.
 - Assignment, category, and status filters, including resolved request history.
 - Atomic claiming and guarded start/resolve actions with lifecycle timestamps.
 
-Browser interfaces and an analytics dashboard will be added in the next phases.
+The TA management interface and analytics dashboard will be added in the next phases.
 
 ## Stack
 
@@ -97,15 +98,33 @@ commit before returning a successful response.
 .\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --reload
 ```
 
-- [API documentation](http://127.0.0.1:8000/docs): explore the current endpoints.
+- [Student page](http://127.0.0.1:8000/): submit a request and follow the queue.
+- [API documentation](http://127.0.0.1:8000/docs): explore the endpoints and test TA actions.
 - [Liveness](http://127.0.0.1:8000/health): returns HTTP 200 when the app is running.
 - [Readiness](http://127.0.0.1:8000/health/ready): executes `SELECT 1` against
   PostgreSQL; returns HTTP 200 when connected or HTTP 503 when unavailable.
 
 The database pool is created at startup and disposed at shutdown. Each request
 uses a separate SQLAlchemy session, which closes after the response. Health
-responses do not expose connection details. The frontend will be served by
-this application in Phase 5. There is no page at `/` yet.
+responses do not expose connection details. FastAPI serves the HTML, CSS, and
+JavaScript from `app/static` on the same origin as the API. There is no frontend
+build step or additional package installation.
+
+### Student workflow
+
+Open the student page and submit your name, assignment, issue category, and
+description. The tracker shows your request ID, status, waiting time, and queue
+position. The active queue has ten requests per page and refreshes every 15
+seconds while the tab is visible; Refresh also updates the tracker.
+
+The app remembers only the request ID in the current tab's session storage,
+so tracking can resume after a reload. You can also enter an ID manually.
+Stop tracking clears the local tracker and leaves the server request unchanged.
+While tracking an active request, the form is disabled to discourage duplicate
+submissions. It becomes available after resolution or after stopping tracking.
+
+Connection errors preserve the form. If submission could not be confirmed,
+check the queue before retrying; the app never automatically retries a POST.
 
 ### Request API
 
@@ -174,6 +193,8 @@ as supported by the installed Starlette version.
 
 GitHub Actions runs the suite against a temporary PostgreSQL 18 service on
 pushes to `main` and pull requests targeting `main`.
+For frontend changes, also check submission, pagination, reload tracking,
+connection recovery, and the layout at desktop and mobile widths in a browser.
 
 ## Roadmap
 
