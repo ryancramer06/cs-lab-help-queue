@@ -39,3 +39,11 @@ def test_ta_page_is_served_without_a_database_connection(settings):
     assert response.status_code == 200
     assert "TA workspace" in response.text
     assert response.headers["cache-control"] == "no-cache"
+
+
+@pytest.mark.parametrize("asset", ["ta.mjs", "ta-ui.mjs", "api.mjs", "ui.mjs"])
+def test_ta_browser_modules_are_served_as_javascript(settings, asset):
+    with TestClient(create_app(settings)) as client:
+        response = client.get(f"/static/{asset}")
+    assert response.status_code == 200
+    assert "javascript" in response.headers["content-type"]

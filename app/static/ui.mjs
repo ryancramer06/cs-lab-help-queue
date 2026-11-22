@@ -3,6 +3,10 @@ const categories = {
   environment: "Environment", other: "Other",
 };
 
+export function categoryLabel(category) {
+  return categories[category] || "Other";
+}
+
 export function formatElapsed(createdAt, end = Date.now()) {
   const start = Date.parse(createdAt);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return "—";
@@ -48,7 +52,7 @@ export function queueItem(request, trackedId) {
   status.lastElementChild.replaceWith(statusBadge(request));
   row.append(
     student, cell("Assignment", request.assignment),
-    cell("Issue", categories[request.issue_category] || "Other"),
+    cell("Issue", categoryLabel(request.issue_category)),
     cell("Wait time", formatElapsed(request.created_at, waitEnd)), status,
   );
   return row;
