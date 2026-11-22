@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Manage programming lab help requests as a teaching assistant.">
+  <title>TA workspace · CS Lab Help Queue</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="CS Lab Help Queue home">
+        <span class="brand-mark" aria-hidden="true">CS</span>
+        <span>CS Lab Help Queue<span class="brand-subtitle">Programming lab support</span></span>
+      </a>
+      <nav aria-label="Application navigation">
+        <a href="/">Student queue</a>
+        <a href="/ta" aria-current="page">TA workspace</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="page">
+    <div class="page-heading">
+      <div><p class="eyebrow">TEACHING ASSISTANTS</p><h1>TA workspace</h1><p class="intro">Claim a request, work with the student, and resolve it when you’re done.</p></div>
+      <p class="connection" id="connection-state">Connecting to the queue…</p>
+    </div>
+    <noscript><p class="notice error">Enable JavaScript to load requests and use the TA actions.</p></noscript>
+
+    <section class="panel ta-identity" aria-labelledby="identity-title">
+      <div class="identity-summary"><p class="eyebrow">THIS TAB’S SESSION</p><h2 id="identity-title">Working as</h2><p id="identity-summary">Choose a name to manage requests.</p></div>
+      <form id="identity-form">
+        <fieldset id="identity-fields" disabled>
+          <legend class="sr-only">TA display name</legend>
+          <div><label for="ta-name">Your TA name</label><input id="ta-name" name="ta_name" autocomplete="name" maxlength="100" required placeholder="e.g. Alex Example" aria-describedby="identity-note identity-message"></div>
+          <button class="button primary" type="submit">Use name</button>
+        </fieldset>
+        <p id="identity-note" class="form-footnote">Use the same name for your assigned requests. This local demo uses display names without sign-in.</p>
+        <p class="notice" id="identity-message" role="status" hidden></p>
+      </form>
+    </section>
+
+    <section class="panel ta-panel" aria-labelledby="requests-title">
+      <div class="section-top"><div><p class="eyebrow">REQUEST MANAGEMENT</p><h2 id="requests-title" tabindex="-1"><span id="view-title">Active requests</span> <span class="count" id="request-count">—</span></h2></div><button class="button secondary" id="refresh-requests" type="button">Refresh</button></div>
+      <form id="filter-form">
+        <fieldset class="ta-filters" id="filter-fields" disabled>
+          <legend class="sr-only">Filter requests</legend>
+          <div class="assignment-filter"><label for="filter-assignment">Assignment</label><input id="filter-assignment" name="assignment" maxlength="120" placeholder="All assignments (exact match)"></div>
+          <div><label for="filter-category">Issue category</label><select id="filter-category" name="issue_category"><option value="">All categories</option><option value="syntax">Syntax</option><option value="debugging">Debugging</option><option value="conceptual">Concepts</option><option value="environment">Environment</option><option value="other">Other</option></select></div>
+          <div><label for="filter-status">Status</label><select id="filter-status" name="status"><option value="">Active requests</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="resolved">Resolved history</option></select></div>
+          <div class="filter-actions"><button class="button primary" type="submit">Apply filters</button><button class="button secondary" id="reset-filters" type="button">Reset</button></div>
+        </fieldset>
+      </form>
+      <p id="filter-summary" class="ta-filter-summary">Active requests · All assignments · All categories</p>
+      <p id="queue-message" class="notice error" role="status" hidden></p>
+      <p id="action-message" class="notice" role="status" hidden></p>
+      <div id="queue-loading" class="empty-state" role="status">Loading requests…</div>
+      <div id="queue-empty" class="empty-state" hidden><h3 id="empty-title">No active requests</h3><p id="empty-description">New student requests will appear here.</p></div>
+      <ul id="ta-request-list" class="ta-request-list" aria-label="Help requests"></ul>
+      <div class="ta-footer"><p id="page-summary">Waiting for requests</p><div class="pagination" aria-label="Request pages"><button class="button secondary" id="previous-page" type="button" disabled>Previous</button><button class="button secondary" id="next-page" type="button" disabled>Next</button></div></div>
+      <p class="ta-refresh-note">Updates every 15 seconds while this page is visible.</p>
+    </section>
+    <footer class="page-footer">CS Lab Help Queue <span>Built for busy programming labs.</span></footer>
+  </main>
+
+  <template id="request-template">
+    <li class="ta-request">
+      <div class="ta-card-top"><div><h3 data-student></h3><p class="request-number" data-number></p></div><div data-status></div></div>
+      <div class="ta-meta"><span data-assignment></span><span data-category></span><span data-wait></span><time data-created></time></div>
+      <details class="ta-description" open><summary>Issue description</summary><p data-description></p></details>
+      <div class="ta-card-footer"><div><p class="ta-owner" data-owner></p><time class="ta-resolved-time" data-resolved hidden></time></div><div class="ta-actions"><button class="button primary" type="button" data-action="claim" disabled>Claim</button><button class="button primary" type="button" data-action="start" hidden>Start work</button><button class="button primary" type="button" data-action="resolve" hidden>Resolve</button></div></div>
+    </li>
+  </template>
+</body>
+</html>
