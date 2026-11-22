@@ -1,6 +1,6 @@
 import { apiRequest } from "./api.mjs";
 import { categoryLabel, showMessage } from "./ui.mjs";
-import { createTaCard, updateTaCard } from "./ta-ui.mjs";
+import { createTaCard, requestAction, updateTaCard } from "./ta-ui.mjs";
 
 const element = (id) => document.getElementById(id);
 const filterForm = element("filter-form");
@@ -9,6 +9,7 @@ const storageKey = "cs-lab-help-queue:ta-name";
 const state = {
   taName: "", filters: {}, visibleFilters: {}, offset: 0, visibleOffset: 0,
   items: [], total: 0, hasLoaded: false, loading: false, stale: false, version: 0,
+  busy: null,
 };
 const cards = new Map();
 let refreshTimer;
@@ -19,13 +20,21 @@ function validName(name) {
 
 function updateIdentity() {
   element("identity-summary").textContent = state.taName || "Choose a name to manage requests.";
-  for (const request of state.items) updateTaCard(cards.get(request.id), request, state.taName);
+  updateControls();
 }
 
 function updateControls() {
-  element("previous-page").disabled = state.loading || state.offset === 0;
-  element("next-page").disabled = state.loading || state.offset + pageSize >= state.total;
-  element("refresh-requests").disabled = state.loading;
+  const blocked = state.loading || Boolean(state.busy);
+  element("previous-page").disabled = blocked || state.offset === 0;
+  element("next-page").disabled = blocked || state.offset + pageSize >= state.total;
+  element("refresh-requests").disabled = blocked;
+  element("identity-fields").disabled = Boolean(state.busy);
+  element("filter-fields").disabled = Boolean(state.busy);
+  for (const request of state.items) {
+    updateTaCard(cards.get(request.id), request, state.taName, {
+      enabled: !blocked && !state.stale, busy: state.busy,
+    });
+  }
 }
 
 function renderRequests() {
@@ -34,7 +43,7 @@ function renderRequests() {
   state.items.forEach((request, index) => {
     let card = cards.get(request.id);
     if (!card) {
-      card = createTaCard(request);
+      card = createTaCard(request, runAction);
       cards.set(request.id, card);
     }
     updateTaCard(card, request, state.taName);
@@ -62,12 +71,12 @@ function renderRequests() {
 
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
-  if (!document.hidden) refreshTimer = setTimeout(refreshRequests, 15_000);
+  if (!document.hidden && !state.busy) refreshTimer = setTimeout(refreshRequests, 15_000);
 }
 
 async function refreshRequests() {
   clearTimeout(refreshTimer);
-  if (document.hidden) return false;
+  if (document.hidden || state.busy) return false;
   const version = ++state.version;
   state.loading = true;
   updateControls();
@@ -109,6 +118,46 @@ async function refreshRequests() {
       element("queue-loading").hidden = true;
       updateControls();
       scheduleRefresh();
+    }
+  }
+}
+
+async function runAction(id, action) {
+  const request = state.items.find((item) => item.id === id);
+  if (state.busy || state.loading || state.stale || !state.taName || !request ||
+      requestAction(request, state.taName) !== action) return;
+  const button = cards.get(id).buttons[action];
+  const hadFocus = document.activeElement === button;
+  const taName = state.taName;
+  state.busy = { id, action };
+  clearTimeout(refreshTimer);
+  updateControls();
+  showMessage(element("action-message"));
+  try {
+    // A write is sent once. If its response is lost, read the queue before offering another action.
+    await apiRequest(`/api/requests/${id}/${action}`, { method: "POST", body: { ta_name: taName } });
+    const messages = {
+      claim: `Request #${id} is assigned to ${taName}. Choose Start work when you begin helping.`,
+      start: `Started work on request #${id}.`,
+      resolve: `Request #${id} is resolved. You can find it in Resolved history.`,
+    };
+    showMessage(element("action-message"), messages[action], "success");
+  } catch (error) {
+    const message = error.status === 409 ?
+      `Request #${id} changed before this action completed. Check its updated status and assignee below.` :
+      error.status === 404 ? `Request #${id} is no longer available. Refreshing the list.` :
+      error.status === 422 ? "The action was rejected. Check your TA name and refresh before trying again." :
+      `Couldn’t confirm the action on request #${id}. Check its latest status before trying again.`;
+    showMessage(element("action-message"), message, "error");
+  } finally {
+    state.busy = null;
+    state.stale = true;
+    updateControls();
+    await refreshRequests();
+    // Move focus only if the user stayed on the action while waiting for its response.
+    if (hadFocus && (document.activeElement === button || document.activeElement === document.body)) {
+      const nextButton = cards.get(id)?.root.querySelector("[data-action]:not([hidden]):not(:disabled)");
+      (nextButton || element("requests-title")).focus();
     }
   }
 }
