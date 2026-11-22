@@ -198,14 +198,18 @@ element("reset-filters").addEventListener("click", () => {
   void refreshRequests();
 });
 element("refresh-requests").addEventListener("click", refreshRequests);
-element("previous-page").addEventListener("click", () => {
-  state.offset = Math.max(0, state.offset - pageSize);
-  void refreshRequests();
-});
-element("next-page").addEventListener("click", () => {
-  state.offset += pageSize;
-  void refreshRequests();
-});
+async function changePage(offset) {
+  const button = document.activeElement;
+  state.offset = offset;
+  if (await refreshRequests()) {
+    // Pagination sits below the cards; bring the new page into view for keyboard users too.
+    if (document.activeElement === button || document.activeElement === document.body) {
+      element("requests-title").focus();
+    }
+  }
+}
+element("previous-page").addEventListener("click", () => void changePage(Math.max(0, state.offset - pageSize)));
+element("next-page").addEventListener("click", () => void changePage(state.offset + pageSize));
 document.addEventListener("visibilitychange", () => {
   clearTimeout(refreshTimer);
   if (!document.hidden) void refreshRequests();
