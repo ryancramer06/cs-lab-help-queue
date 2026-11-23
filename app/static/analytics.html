@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Understand programming lab request volume, wait times, and common issues.">
+  <title>Analytics · CS Lab Help Queue</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="module" src="/static/analytics.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="header-inner">
+    <a class="brand" href="/" aria-label="CS Lab Help Queue home"><span class="brand-mark" aria-hidden="true">CS</span><span>CS Lab Help Queue<span class="brand-subtitle">Programming lab support</span></span></a>
+    <nav aria-label="Application navigation"><a href="/">Student queue</a><a href="/ta">TA workspace</a><a href="/analytics" aria-current="page">Analytics</a></nav>
+  </div></header>
+  <main id="main" class="page">
+    <div class="page-heading"><div><p class="eyebrow">LAB INSIGHTS</p><h1>Queue analytics</h1><p class="intro">See when students need help and where they get stuck.</p></div><button class="button secondary" id="refresh-analytics" type="button" disabled>Refresh</button></div>
+    <noscript><p class="notice error">Enable JavaScript to load queue analytics.</p></noscript>
+    <div class="analytics-context"><p>Overall totals across all requests</p><p id="connection-state">Connecting…</p></div>
+    <p id="analytics-message" class="notice" role="status" hidden></p>
+    <div id="analytics-loading" class="panel empty-state" role="status">Loading lab activity…</div>
+    <section id="analytics-results" aria-label="Queue analytics" aria-busy="true" hidden>
+      <div id="analytics-empty" class="notice" hidden><h2>No requests yet</h2><p>Request patterns will appear here after students join the queue. <a href="/">Open the student queue</a>.</p></div>
+      <dl class="analytics-metrics">
+        <div class="panel metric"><dt>Total requests</dt><dd><span class="metric-value" id="total-requests">—</span><span class="metric-note">Across all assignments</span></dd></div>
+        <div class="panel metric"><dt>Pending</dt><dd><span class="metric-value" id="pending-requests">—</span><span class="metric-note">Waiting or claimed by a TA</span></dd></div>
+        <div class="panel metric"><dt>In progress</dt><dd><span class="metric-value" id="in-progress-requests">—</span><span class="metric-note">Students currently being helped</span></dd></div>
+        <div class="panel metric"><dt>Resolved</dt><dd><span class="metric-value" id="resolved-requests">—</span><span class="metric-note">Completed help requests</span></dd></div>
+        <div class="panel metric"><dt>Average wait</dt><dd><span class="metric-value" id="average-wait">—</span><span class="metric-note" id="wait-sample">No requests started yet</span></dd></div>
+        <div class="panel metric"><dt>Average resolution</dt><dd><span class="metric-value" id="average-resolution">—</span><span class="metric-note" id="resolution-sample">No requests resolved yet</span></dd></div>
+      </dl>
+      <section class="panel analytics-panel" aria-labelledby="activity-title">
+        <div class="section-top"><div><p class="eyebrow">REQUEST VOLUME</p><h2 id="activity-title">Activity over time</h2></div><p class="chart-scope">Last 14 days · UTC</p></div>
+        <p class="chart-description" id="activity-range">Daily help request submissions</p>
+        <figure class="activity-figure"><div id="activity-chart" class="activity-chart" aria-hidden="true"></div><figcaption id="activity-summary" class="chart-caption"></figcaption></figure>
+        <details class="chart-data"><summary>View daily counts</summary><table><caption class="sr-only">Daily request submissions in UTC</caption><thead><tr><th scope="col">Date</th><th scope="col">Requests</th></tr></thead><tbody id="activity-table"></tbody></table></details>
+      </section>
+      <div class="analytics-breakdowns">
+        <section class="panel analytics-panel" aria-labelledby="category-title"><p class="eyebrow">COMMON QUESTIONS</p><h2 id="category-title">Issue categories</h2><p class="chart-description">All requests, including resolved requests</p><ul id="category-chart" class="breakdown-list" aria-label="Requests by issue category"></ul></section>
+        <section class="panel analytics-panel" aria-labelledby="assignment-title"><p class="eyebrow">COURSEWORK</p><h2 id="assignment-title">Requests by assignment</h2><p class="chart-description" id="assignment-scope">Up to 10 assignments, ordered by request count</p><ul id="assignment-chart" class="breakdown-list" aria-label="Requests by assignment"></ul></section>
+      </div>
+      <p class="analytics-explanation">Wait time measures submission to the start of help. Resolution time measures time spent helping. Averages include valid, completed time intervals; requests still waiting are excluded from the wait average.</p>
+      <p class="ta-refresh-note">Updates every 30 seconds while this page is visible.</p>
+    </section>
+    <footer class="page-footer">CS Lab Help Queue <span>Built for busy programming labs.</span></footer>
+  </main>
+</body>
+</html>

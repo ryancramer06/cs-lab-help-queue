@@ -52,6 +52,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ta_page() -> FileResponse:
         return FileResponse(static_directory / "ta.html", headers={"Cache-Control": "no-cache"})
 
+    @application.get("/analytics", response_class=FileResponse, include_in_schema=False)
+    def analytics_page() -> FileResponse:
+        return FileResponse(static_directory / "analytics.html", headers={"Cache-Control": "no-cache"})
+
     @application.middleware("http")
     async def live_request_data(request: Request, call_next) -> Response:
         response = await call_next(request)

@@ -24,7 +24,7 @@ def test_student_page_and_styles_are_served_without_a_database(settings):
     assert cached_script.headers["cache-control"] == "no-cache"
 
 
-@pytest.mark.parametrize("path", ["/", "/ta"])
+@pytest.mark.parametrize("path", ["/", "/ta", "/analytics"])
 def test_frontend_paths_do_not_depend_on_the_working_directory(settings, tmp_path, monkeypatch, path):
     monkeypatch.chdir(tmp_path)
     with TestClient(create_app(settings)) as client:
@@ -46,9 +46,17 @@ def test_ta_page_is_served_without_a_database_connection(settings):
     assert response.headers["cache-control"] == "no-cache"
 
 
-@pytest.mark.parametrize("asset", ["ta.mjs", "ta-ui.mjs", "api.mjs", "ui.mjs"])
+@pytest.mark.parametrize("asset", ["ta.mjs", "ta-ui.mjs", "api.mjs", "ui.mjs", "analytics.mjs"])
 def test_ta_browser_modules_are_served_as_javascript(settings, asset):
     with TestClient(create_app(settings)) as client:
         response = client.get(f"/static/{asset}")
     assert response.status_code == 200
     assert "javascript" in response.headers["content-type"]
+
+
+def test_analytics_page_is_available_when_the_database_is_down(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/analytics")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    assert "Queue analytics" in response.text
