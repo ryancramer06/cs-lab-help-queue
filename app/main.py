@@ -56,6 +56,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if request.url.path.startswith("/api/"):
             # Queue state changes often, and responses contain student request details.
             response.headers["Cache-Control"] = "no-store"
+        elif request.url.path.startswith("/static/"):
+            # Keep cached scripts and styles in sync with the HTML after an update.
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     @application.exception_handler(RequestValidationError)

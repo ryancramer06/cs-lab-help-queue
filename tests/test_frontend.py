@@ -9,14 +9,19 @@ def test_student_page_and_styles_are_served_without_a_database(settings):
         page = client.get("/")
         stylesheet = client.get("/static/styles.css")
         script = client.get("/static/student.mjs")
+        cached_script = client.get("/static/student.mjs", headers={"If-None-Match": script.headers["etag"]})
 
     assert page.status_code == 200
     assert page.headers["content-type"].startswith("text/html")
     assert "CS Lab Help Queue" in page.text
     assert stylesheet.status_code == 200
     assert stylesheet.headers["content-type"].startswith("text/css")
+    assert stylesheet.headers["cache-control"] == "no-cache"
     assert script.status_code == 200
     assert "javascript" in script.headers["content-type"]
+    assert script.headers["cache-control"] == "no-cache"
+    assert cached_script.status_code == 304
+    assert cached_script.headers["cache-control"] == "no-cache"
 
 
 @pytest.mark.parametrize("path", ["/", "/ta"])
