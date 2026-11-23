@@ -148,7 +148,7 @@ dd { margin: 0; font-size: 1.15rem; font-weight: 650; }
 .chart-description { margin-top: 8px; }
 .activity-figure { margin: 20px 0 0; }
 .activity-chart { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 12px; height: 220px; }
-.activity-day { min-width: 0; display: grid; grid-template-rows: 24px minmax(0, 1fr) 22px; gap: 7px; text-align: center; }
+.activity-day { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 24px minmax(0, 1fr) 22px; gap: 7px; text-align: center; }
 .activity-value { font-size: .875rem; color: #334a68; }
 .activity-track { display: flex; align-items: end; justify-content: center; border-bottom: 1px solid var(--line); }
 .activity-bar { display: block; width: 70%; max-width: 42px; background: #386db6; border-radius: 3px 3px 0 0; }
@@ -180,6 +180,10 @@ dd { margin: 0; font-size: 1.15rem; font-weight: 650; }
   .analytics-metrics { grid-template-columns: 1fr; }
   .analytics-panel .section-top { flex-wrap: wrap; }
   .chart-scope { text-align: left; }
+}
+@media (max-width: 600px) {
+  .activity-day { grid-template-rows: minmax(0, 1fr) 22px; }
+  .activity-value { display: none; }
 }
 @media (max-width: 1000px) {
   .ta-filters { grid-template-columns: 1fr 1fr; }

@@ -44,7 +44,8 @@ function renderBreakdown(id, items, label) {
 }
 
 function renderActivity(activity) {
-  const maximum = Math.max(1, ...activity.map((day) => day.count));
+  const peak = Math.max(...activity.map((day) => day.count));
+  const maximum = Math.max(1, peak);
   const tableRows = [];
   const columns = activity.map((day) => {
     const date = new Date(`${day.date}T00:00:00Z`);
@@ -67,7 +68,7 @@ function renderActivity(activity) {
   element("activity-chart").replaceChildren(...columns);
   element("activity-table").replaceChildren(...tableRows);
   const total = activity.reduce((sum, day) => sum + day.count, 0);
-  element("activity-summary").textContent = `${number.format(total)} requests submitted during this period. Days with no submissions are shown as zero.`;
+  element("activity-summary").textContent = `${number.format(total)} requests submitted during this period. Peak daily count: ${number.format(peak)}. Use View daily counts for exact values on every date.`;
   element("activity-range").textContent = `${utcDate.format(new Date(`${activity[0].date}T00:00:00Z`))} – ${utcDate.format(new Date(`${activity.at(-1).date}T00:00:00Z`))} · Daily submissions`;
 }
 
