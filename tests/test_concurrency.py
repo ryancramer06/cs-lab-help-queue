@@ -7,7 +7,9 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import event, func, insert, update
+from sqlalchemy import event, func, insert, select, text, update
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 from sqlalchemy.engine import make_url
 from sqlalchemy.schema import CreateSchema, DropSchema
 
@@ -15,6 +17,7 @@ from app.config import Settings
 from app.database import create_database_engine
 from app.main import create_app
 from app.models import HelpRequest, RequestStatus
+from scripts.seed_demo import seed_demo_data
 
 
 @pytest.fixture
@@ -176,3 +179,23 @@ def test_analytics_totals_and_breakdowns_use_one_snapshot(concurrent_settings, r
         assert sum(group["count"] for group in data["by_assignment"]) == 1
         assert sum(day["count"] for day in data["activity"]) == 1
         assert client.get("/api/analytics").json()["total_requests"] == 2
+
+
+def test_demo_seed_stops_waiting_for_a_busy_table(concurrent_settings):
+    engine = create_database_engine(concurrent_settings)
+    try:
+        with engine.connect() as blocker:
+            blocker.execute(text("LOCK TABLE help_requests IN ROW EXCLUSIVE MODE"))
+            with Session(engine) as session:
+                # Bound the test too, so a missing lock timeout fails instead of hanging CI.
+                session.execute(text("SET LOCAL statement_timeout = '6s'"))
+                with pytest.raises(OperationalError) as error:
+                    seed_demo_data(session)
+                assert error.value.orig.sqlstate == "55P03"  # PostgreSQL lock timeout
+                session.rollback()
+                assert session.scalar(select(func.count()).select_from(HelpRequest)) == 0
+            blocker.rollback()
+        with Session(engine) as session, session.begin():
+            assert seed_demo_data(session) == 85
+    finally:
+        engine.dispose()

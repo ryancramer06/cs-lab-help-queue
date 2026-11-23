@@ -16,6 +16,8 @@ from app.models import HelpRequest, IssueCategory, RequestStatus
 def seed_demo_data(session: Session, *, now: datetime | None = None) -> int:
     """Add fictional requests; the caller owns the transaction."""
     # Hold off new submissions until the empty-table check and inserts finish together.
+    # An unfinished transaction elsewhere should not leave this command waiting forever.
+    session.execute(text("SET LOCAL lock_timeout = '5s'"))
     session.execute(text("LOCK TABLE help_requests IN SHARE ROW EXCLUSIVE MODE"))
     if session.scalar(select(func.count()).select_from(HelpRequest)):
         raise ValueError("Demo data requires an empty help_requests table. Use a separate demo database.")
@@ -76,8 +78,11 @@ def main() -> int:
     except ValueError as error:
         print(str(error))
         return 1
-    except SQLAlchemyError:
-        print("Could not seed demo data. Check the database connection and run Alembic migrations first.")
+    except SQLAlchemyError as error:
+        if getattr(getattr(error, "orig", None), "sqlstate", None) == "55P03":
+            print("The demo database is busy. Finish any open transactions and try again.")
+        else:
+            print("Could not seed demo data. Check the database connection and run Alembic migrations first.")
         return 1
     finally:
         engine.dispose()

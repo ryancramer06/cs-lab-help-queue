@@ -229,6 +229,8 @@ pending and in-progress requests for trying the TA workflow. It never clears
 existing data and refuses to run when the request table is nonempty, including
 on a second run. Seed the data before starting the app. This dataset is for
 local demonstration; public-demo mode and deployment safeguards come later.
+If another transaction holds the request table, seeding stops after five seconds
+with a busy-database message. Finish that transaction before retrying.
 
 ### Tests
 
