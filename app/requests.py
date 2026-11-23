@@ -1,10 +1,10 @@
 """Database operations for help requests."""
 
-from sqlalchemy import Select, and_, func, or_, select, true, update
+from sqlalchemy import Select, and_, case, func, or_, select, true, update
 from sqlalchemy.orm import Session, aliased
 
 from app.models import HelpRequest, IssueCategory, RequestStatus
-from app.schemas import HelpRequestCreate
+from app.schemas import HelpRequestCreate, QueuePosition
 
 
 def create_request(session: Session, submission: HelpRequestCreate) -> HelpRequest:
@@ -86,19 +86,25 @@ def get_request_page(
     return [request for request, _ in rows if request is not None], rows[0][1]
 
 
-def get_queue_position(session: Session, request: HelpRequest) -> int | None:
-    if request.status != RequestStatus.PENDING:
-        return None
+def get_queue_position(session: Session, request_id: int) -> QueuePosition | None:
+    request = aliased(HelpRequest)
     earlier = or_(
         HelpRequest.created_at < request.created_at,
         and_(HelpRequest.created_at == request.created_at, HelpRequest.id < request.id),
     )
-    waiting_ahead = session.scalar(
+    waiting_ahead = (
         select(func.count()).select_from(HelpRequest).where(
             HelpRequest.status == RequestStatus.PENDING, earlier
         )
+        .correlate(request).scalar_subquery()
     )
-    return (waiting_ahead or 0) + 1
+    # Read the student's status and the waiting count in one snapshot, just like the queue page.
+    statement = select(
+        request.id.label("request_id"),
+        case((request.status == RequestStatus.PENDING, waiting_ahead + 1)).label("position"),
+    ).where(request.id == request_id)
+    row = session.execute(statement).one_or_none()
+    return QueuePosition(request_id=row.request_id, position=row.position) if row is not None else None
 
 
 def claim_request(session: Session, request_id: int, ta_name: str) -> HelpRequest | None:

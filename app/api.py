@@ -65,10 +65,10 @@ def read_request(request_id: RequestId, session: DatabaseSession) -> HelpRequest
 
 @router.get("/{request_id}/position", response_model=QueuePosition, responses=NOT_FOUND_RESPONSE)
 def read_queue_position(request_id: RequestId, session: DatabaseSession) -> QueuePosition:
-    request = get_request(session, request_id)
-    if request is None:
+    position = get_queue_position(session, request_id)
+    if position is None:
         raise HTTPException(status_code=404, detail="Help request not found")
-    return QueuePosition(request_id=request.id, position=get_queue_position(session, request))
+    return position
 
 
 def _save_action(

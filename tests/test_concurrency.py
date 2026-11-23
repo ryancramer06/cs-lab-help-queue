@@ -106,3 +106,41 @@ def test_queue_rows_and_total_use_the_same_snapshot(concurrent_settings, request
         assert len(page["items"]) == page["total"] == 1
         assert page["items"][0]["status"] == "pending"
         assert client.get("/api/requests").json()["total"] == 0
+
+
+def test_position_and_request_status_use_the_same_snapshot(concurrent_settings, request_payload):
+    application = create_app(concurrent_settings)
+    writer = create_database_engine(concurrent_settings)
+    changed = False
+
+    with TestClient(application) as client:
+        first = client.post("/api/requests", json=request_payload).json()
+        second = client.post("/api/requests", json=request_payload).json()
+        reader = application.state.session_factory.kw["bind"]
+
+        def start_after_position_select(connection, cursor, statement, parameters, context, executemany):
+            nonlocal changed
+            if changed or "SELECT" not in statement or "help_requests" not in statement:
+                return
+            changed = True
+            # The second student moves from position 2 straight to being helped.
+            # Mixing the old status with the new queue would incorrectly return position 1.
+            with writer.begin() as other_connection:
+                other_connection.execute(
+                    update(HelpRequest).where(HelpRequest.id.in_([first["id"], second["id"]])).values(
+                        status=RequestStatus.IN_PROGRESS, assigned_ta="Alex Example",
+                        claimed_at=func.clock_timestamp(), started_at=func.clock_timestamp(),
+                    )
+                )
+
+        event.listen(reader, "after_cursor_execute", start_after_position_select)
+        try:
+            response = client.get(f'/api/requests/{second["id"]}/position')
+        finally:
+            event.remove(reader, "after_cursor_execute", start_after_position_select)
+            writer.dispose()
+
+        assert changed
+        assert response.status_code == 200
+        assert response.json() == {"request_id": second["id"], "position": 2}
+        assert client.get(f'/api/requests/{second["id"]}/position').json()["position"] is None
