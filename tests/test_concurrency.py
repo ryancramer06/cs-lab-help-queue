@@ -7,7 +7,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import event, func, update
+from sqlalchemy import event, func, insert, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.schema import CreateSchema, DropSchema
 
@@ -144,3 +144,35 @@ def test_position_and_request_status_use_the_same_snapshot(concurrent_settings, 
         assert response.status_code == 200
         assert response.json() == {"request_id": second["id"], "position": 2}
         assert client.get(f'/api/requests/{second["id"]}/position').json()["position"] is None
+
+
+def test_analytics_totals_and_breakdowns_use_one_snapshot(concurrent_settings, request_payload):
+    application = create_app(concurrent_settings)
+    writer = create_database_engine(concurrent_settings)
+    changed = False
+    with TestClient(application) as client:
+        assert client.post("/api/requests", json=request_payload).status_code == 201
+        reader = application.state.session_factory.kw["bind"]
+
+        def submit_after_analytics_select(connection, cursor, statement, parameters, context, executemany):
+            nonlocal changed
+            if changed or "SELECT" not in statement or "help_requests" not in statement:
+                return
+            changed = True
+            with writer.begin() as other_connection:
+                other_connection.execute(insert(HelpRequest).values(**request_payload))
+
+        event.listen(reader, "after_cursor_execute", submit_after_analytics_select)
+        try:
+            response = client.get("/api/analytics")
+        finally:
+            event.remove(reader, "after_cursor_execute", submit_after_analytics_select)
+            writer.dispose()
+
+        assert changed and response.status_code == 200
+        data = response.json()
+        assert data["total_requests"] == 1
+        assert sum(group["count"] for group in data["by_category"]) == 1
+        assert sum(group["count"] for group in data["by_assignment"]) == 1
+        assert sum(day["count"] for day in data["activity"]) == 1
+        assert client.get("/api/analytics").json()["total_requests"] == 2

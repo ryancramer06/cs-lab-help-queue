@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.api import router as request_router
+from app.analytics_api import router as analytics_router
 from app.database import create_database_engine, get_session
 
 
@@ -39,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(request_router)
+    application.include_router(analytics_router)
     static_directory = Path(__file__).resolve().parent / "static"
     application.mount("/static", StaticFiles(directory=static_directory), name="static")
 

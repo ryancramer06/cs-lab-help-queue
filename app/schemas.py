@@ -1,5 +1,6 @@
 """Validation for data entering the application."""
 
+from datetime import date
 from typing import Annotated
 
 from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field
@@ -77,3 +78,34 @@ class TaAction(BaseModel):
 
 class ApiError(BaseModel):
     detail: str
+
+
+class CategoryCount(BaseModel):
+    issue_category: IssueCategory
+    count: int
+
+
+class AssignmentCount(BaseModel):
+    assignment: str
+    count: int
+
+
+class DailyCount(BaseModel):
+    date: date
+    count: int
+
+
+class AnalyticsRead(BaseModel):
+    generated_at: AwareDatetime
+    total_requests: int
+    pending_requests: int
+    in_progress_requests: int
+    resolved_requests: int
+    average_wait_seconds: float | None
+    wait_sample_size: int
+    average_resolution_seconds: float | None
+    resolution_sample_size: int
+    total_assignments: int
+    by_category: list[CategoryCount]
+    by_assignment: list[AssignmentCount]
+    activity: list[DailyCount]

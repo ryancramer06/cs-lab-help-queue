@@ -7,6 +7,7 @@ from app.main import create_app
 @pytest.mark.parametrize(
     "method,path,expected_codes",
     [
+        ("get", "/api/analytics", {"200", "503"}),
         ("get", "/api/requests", {"200", "422", "503"}),
         ("post", "/api/requests", {"201", "422", "503"}),
         ("get", "/api/requests/{request_id}", {"200", "404", "422", "503"}),
