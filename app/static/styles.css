@@ -15,7 +15,7 @@ body { margin: 0; }
 a { color: var(--blue); }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
-button:disabled { cursor: default; opacity: .55; }
+button:disabled, button[aria-disabled="true"] { cursor: default; opacity: .55; }
 button, input, select, textarea { min-height: 44px; }
 :focus-visible { outline: 3px solid #75a9f7; outline-offset: 3px; }
 [hidden] { display: none !important; }
@@ -58,9 +58,9 @@ select { appearance: none; padding-right: 36px; background-image: url("data:imag
 .field-error { margin-top: 6px; color: #a12e24; font-size: .875rem; }
 .button { border: 1px solid transparent; border-radius: 6px; padding: 9px 15px; font-weight: 600; font-size: .875rem; }
 .primary { background: var(--blue); color: white; }
-.primary:hover:not(:disabled) { background: #1b4585; }
+.primary:hover:not(:disabled):not([aria-disabled="true"]) { background: #1b4585; }
 .secondary { background: white; border-color: #c7d2e1; color: #334a68; }
-.secondary:hover:not(:disabled) { background: #f0f4fa; }
+.secondary:hover:not(:disabled):not([aria-disabled="true"]) { background: #f0f4fa; }
 .full-width { width: 100%; }
 .text-button { color: var(--blue); border: 0; padding: 4px 0; background: transparent; font-size: .875rem; text-decoration: underline; text-underline-offset: 3px; }
 .form-footnote { color: var(--muted); font-size: .8rem; margin-top: 17px; }

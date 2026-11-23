@@ -102,7 +102,8 @@ async function refreshAnalytics() {
   clearTimeout(refreshTimer);
   if (document.hidden || loading) return;
   loading = true;
-  element("refresh-analytics").disabled = true;
+  // Keep the focused button in the tab order while the loading guard blocks repeat clicks.
+  element("refresh-analytics").setAttribute("aria-disabled", "true");
   element("analytics-results").setAttribute("aria-busy", "true");
   try {
     const data = await apiRequest("/api/analytics");
@@ -118,6 +119,7 @@ async function refreshAnalytics() {
   } finally {
     loading = false;
     element("refresh-analytics").disabled = false;
+    element("refresh-analytics").removeAttribute("aria-disabled");
     element("analytics-loading").hidden = true;
     element("analytics-results").setAttribute("aria-busy", "false");
     scheduleRefresh();
