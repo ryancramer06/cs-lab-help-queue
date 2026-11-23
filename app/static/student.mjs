@@ -38,7 +38,7 @@ async function refreshQueue() {
     const query = new URLSearchParams({ limit: String(pageSize), offset: String(state.offset) });
     const page = await apiRequest(`/api/requests?${query}`);
     // A newer page request may finish first. Don't replace it with an older response.
-    if (version !== state.queueVersion) return;
+    if (version !== state.queueVersion) return false;
     if (state.offset > 0 && state.offset >= page.total) {
       state.offset = Math.floor(Math.max(0, page.total - 1) / pageSize) * pageSize;
       return await refreshQueue();
@@ -51,8 +51,9 @@ async function refreshQueue() {
     showMessage(element("queue-message"));
     element("connection-state").classList.remove("offline");
     element("connection-state").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    return true;
   } catch (error) {
-    if (version !== state.queueVersion) return;
+    if (version !== state.queueVersion) return false;
     state.offset = state.visibleOffset;
     showMessage(element("queue-message"), state.hasLoaded ?
       "The queue couldn’t update. Showing the last results; use Refresh to try again." :
@@ -60,6 +61,7 @@ async function refreshQueue() {
     element("connection-state").textContent = "Queue unavailable";
     element("connection-state").classList.add("offline");
     if (!state.hasLoaded) element("page-summary").textContent = "Queue unavailable";
+    return false;
   } finally {
     if (version === state.queueVersion) {
       state.queueLoading = false;
@@ -267,14 +269,18 @@ element("description").addEventListener("input", (event) => {
   element("description-count").textContent = `${event.target.value.length} / 1000`;
 });
 element("refresh-queue").addEventListener("click", refreshAll);
-element("previous-page").addEventListener("click", () => {
-  state.offset = Math.max(0, state.offset - pageSize);
-  void refreshQueue();
-});
-element("next-page").addEventListener("click", () => {
-  state.offset += pageSize;
-  void refreshQueue();
-});
+async function changePage(offset) {
+  const button = document.activeElement;
+  state.offset = offset;
+  if (await refreshQueue()) {
+    // The clicked page button may become disabled. Keep keyboard focus on the new results.
+    if (document.activeElement === button || document.activeElement === document.body) {
+      element("queue-title").focus();
+    }
+  }
+}
+element("previous-page").addEventListener("click", () => void changePage(Math.max(0, state.offset - pageSize)));
+element("next-page").addEventListener("click", () => void changePage(state.offset + pageSize));
 element("track-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (state.trackingLoading) return;
@@ -290,6 +296,7 @@ element("stop-tracking").addEventListener("click", () => {
   clearTracking();
   showMessage(element("tracking-message"), `Stopped tracking #${id} on this tab. The server request is unchanged.`);
   showMessage(element("form-message"));
+  element("tracking-title").focus();
 });
 document.addEventListener("visibilitychange", () => {
   clearTimeout(refreshTimer);
