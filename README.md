@@ -6,9 +6,9 @@ for help and help TAs manage requests during busy lab sessions.
 
 ## Development status
 
-Phase 6: students can submit and track requests, and TAs can manage the queue
-through a responsive browser workspace. The request API and both interfaces
-are implemented. Analytics is the next planned phase.
+Phase 7: the student queue, TA workspace, and analytics dashboard are implemented.
+Analytics includes request totals, wait and resolution averages, category and
+assignment breakdowns, and daily activity. Reliability review is the next phase.
 
 ## Features
 
@@ -17,8 +17,8 @@ are implemented. Analytics is the next planned phase.
 - Assignment, category, and status filters, including resolved request history.
 - Atomic claiming and guarded start/resolve actions with lifecycle timestamps.
 - TA workspace with assignment controls, wait times, filters, and resolved history.
-
-The analytics dashboard is planned for Phase 7.
+- Analytics dashboard with metric cards, bar charts, and an accessible daily-count table.
+- Fictional demo data generator that refuses to overwrite an existing queue.
 
 ## Stack
 
@@ -101,6 +101,7 @@ commit before returning a successful response.
 
 - [Student page](http://127.0.0.1:8000/): submit a request and follow the queue.
 - [TA workspace](http://127.0.0.1:8000/ta): claim, start, and resolve requests.
+- [Analytics dashboard](http://127.0.0.1:8000/analytics): view lab activity and time averages.
 - [API documentation](http://127.0.0.1:8000/docs): explore the endpoints and test TA actions.
 - [Liveness](http://127.0.0.1:8000/health): returns HTTP 200 when the app is running.
 - [Readiness](http://127.0.0.1:8000/health/ready): executes `SELECT 1` against
@@ -159,6 +160,7 @@ Authentication and public-demo safeguards are still future work.
 | GET | `/api/requests` | List a filtered page of requests |
 | GET | `/api/requests/{id}` | Read request details and status |
 | GET | `/api/requests/{id}/position` | Read its position among pending requests |
+| GET | `/api/analytics` | Read aggregate metrics and chart data |
 | POST | `/api/requests/{id}/claim` | Assign an unclaimed pending request to a TA |
 | POST | `/api/requests/{id}/start` | Start work on the assigned request |
 | POST | `/api/requests/{id}/resolve` | Resolve a request that is in progress |
@@ -191,6 +193,43 @@ TA actions currently use a supplied display name and check it against the
 recorded assignee. There is no login or authentication yet; this is a local
 development/demo workflow. Authentication and public-demo safeguards are future work.
 
+### Analytics
+
+The dashboard reads `/api/analytics` and refreshes every 30 seconds while
+visible. Counts and category breakdowns cover all requests. The assignment
+chart shows the ten busiest assignments, with ties ordered by assignment name.
+Daily activity shows submissions over the last 14 UTC dates, including today;
+days without submissions are filled with zero.
+
+Average wait measures submission to the start of help, including requests
+currently in progress. Average resolution measures work starting to resolution.
+Each average shows its sample count. Missing or out-of-order timestamp pairs
+are excluded; no samples returns `null` in the API and a dash on screen.
+Pending requests, including claimed requests, do not contribute to average wait.
+The response includes `generated_at` and duration values in seconds.
+
+PostgreSQL calculates totals and breakdowns in one SQL statement so they share
+the same snapshot during concurrent changes. The endpoint does not return
+student names or descriptions. Charts use HTML and CSS, with a daily-count
+table available alongside the activity chart. No chart library is required.
+
+### Fictional demo data
+
+Use an empty database reserved for demonstration and point `DATABASE_URL` at
+it before running:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m scripts.seed_demo --confirm-demo
+```
+
+The generator adds 85 fictional requests with varied assignments, issue
+categories, and lifecycle timestamps over approximately two weeks. It includes
+pending and in-progress requests for trying the TA workflow. It never clears
+existing data and refuses to run when the request table is nonempty, including
+on a second run. Seed the data before starting the app. This dataset is for
+local demonstration; public-demo mode and deployment safeguards come later.
+
 ### Tests
 
 ```powershell
@@ -212,7 +251,8 @@ schemas inside transactions and roll them back after each test, including
 migration downgrade tests. The concurrency test uses a committed temporary
 schema so independent connections can compete, then removes that schema.
 Tests cover validation, persistence, filters, positions, status transitions,
-and two simultaneous HTTP claim attempts. The test client uses
+simultaneous claims, consistent analytics snapshots, duration calculations,
+UTC activity grouping, and safe demo seeding. The test client uses
 [HTTPX2](https://www.starlette.io/testclient/),
 as supported by the installed Starlette version.
 
@@ -221,6 +261,8 @@ pushes to `main` and pull requests targeting `main`.
 For frontend changes, also check student submission and tracking, TA claiming
 through resolution, filters and history, competing claims, pagination, reload
 restoration, connection recovery, and desktop/mobile layouts in a browser.
+For analytics, check empty data, populated charts, daily counts, and recovery
+after a failed refresh.
 
 ## Roadmap
 
